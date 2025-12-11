@@ -26,7 +26,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Request logger middleware - logs all incoming requests with full endpoint
 // app.use(requestLogger);
 
-// Database connection middleware
+// Database connection middleware jdhfhf
 app.use(async (req, res, next) => {
   try {
     // Only connect if not already connected
