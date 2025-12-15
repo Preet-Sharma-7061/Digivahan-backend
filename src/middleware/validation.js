@@ -349,6 +349,49 @@ const commonValidations = {
       .withMessage(VALIDATION_MESSAGES.USER_ID_LENGTH);
   },
 
+  // User ID validation
+  orderId: (field = "order_id") => {
+    const { body } = require("express-validator");
+    return body(field)
+      .notEmpty()
+      .withMessage("Order Id is Required To fetch the Details of order")
+      .isLength({ min: 1, max: 100 })
+      .withMessage("order_id must be between 1 and 100 characters");
+  },
+
+  validateDeliveryPostcode: (field = "delivery_postcode") => {
+    const { body } = require("express-validator");
+    return body(field)
+      .notEmpty()
+      .withMessage("Delivery postcode is required")
+      .isLength({ min: 6, max: 6 })
+      .withMessage("Delivery postcode must be exactly 6 digits")
+      .isNumeric()
+      .withMessage("Delivery postcode must contain only numbers");
+  },
+
+  // Document Type validation
+  docType: (field = "doc_type") => {
+    const { body } = require("express-validator");
+
+    return body(field)
+      .notEmpty()
+      .withMessage("Document type is required")
+      .isIn(["aadhar", "polution", "insurance", "rc"])
+      .withMessage("Invalid document type");
+  },
+
+  // Product Type validation
+  productType: (field = "product_type") => {
+    const { body } = require("express-validator");
+
+    return body(field)
+      .notEmpty()
+      .withMessage("Product type is required")
+      .isIn(["app", "vehicle", "service", "other"])
+      .withMessage("Invalid product type");
+  },
+
   // Contact ID validation
   contactId: (field = "contact_id") => {
     const { body } = require("express-validator");

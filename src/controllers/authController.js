@@ -406,7 +406,7 @@ const resendOtp = async (req, res) => {
 
 const signIn = async (req, res) => {
   try {
-    const { login_type, login_value, password } = req.body;
+    const { login_type, login_value, password } = req.body; 
 
     // Validate login_type
     if (!["email", "phone"].includes(login_type)) {

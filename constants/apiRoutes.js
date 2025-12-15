@@ -71,10 +71,7 @@ const API_ROUTES = {
     // File upload routes
     FILE_UPLOAD: {
       SINGLE: "/upload/single",
-      MULTIPLE: "/upload/multiple",
-      PROFILE_IMAGE: "/upload/profile-image",
-      VEHICLE_DOCUMENT: "/upload/vehicle-document",
-      VEHICLE_DOC: "/upload_vehicle_doc",
+      DOC_DELETE:"/vehicle/doc-delete"
     },
 
     // File management routes
@@ -340,10 +337,16 @@ const API_ROUTES = {
   ORDER: {
     BASE: "/api",
     CREATE_ORDER: "/orders",
+    // find from user myorder node
     USER_ORDERS: "/orders-user-list",
-    ORDER_DETAILS: "/orders/:order_id",
+    USER_ORDER_DETAILS: "/orders/order-details",
+    // find from direct order section
+    FETCH_BY_ORDER_ID:"/admin/fetch/order-id",
+    FETCH_BY_USER_ID:"/admin/fetch/user-id",
     CANCEL_ORDER: "/orders/cancel",
+    CHECK_COURIER: "/check/courier-service"
   },
+  
 
   // Review routes
   REVIEW: {
@@ -358,8 +361,8 @@ const API_ROUTES = {
   // Chat routes
   CHAT: {
     BASE: "/api",
-    CREATE_OR_GET_CHAT: "/chats",
-    GET_USER_CHATS: "/chats/:userId",
+    CREATE_ROOM_FOR_CHAT: "/create/room",
+    GET_USER_CHATS_ROOM_DETAILS: "/user/chat-box-deatils",
     GET_CHAT_DETAILS: "/chats/details/:chatId",
     SEND_MESSAGE: "/messages",
     GET_MESSAGES: "/messages/:chatId",
