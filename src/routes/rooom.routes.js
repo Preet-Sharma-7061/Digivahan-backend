@@ -17,7 +17,7 @@ router.post(
   createRoom
 );
 
-router.get(
+router.post(
   API_ROUTES.CHAT.GET_USER_CHATS_ROOM_DETAILS,
   authenticateToken,
   [

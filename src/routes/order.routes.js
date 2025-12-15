@@ -22,13 +22,13 @@ router.post(
   GenerateOrder
 );
 
-router.get(
+router.post(
   API_ROUTES.ORDER.USER_ORDERS,
   [commonValidations.userId("user_id"), handleValidationErrors],
   getUserAllOrder
 );
 
-router.get(
+router.post(
   API_ROUTES.ORDER.USER_ORDER_DETAILS,
   [
     commonValidations.userId("user_id"),
@@ -38,7 +38,7 @@ router.get(
   findSingleOrderData
 );
 
-router.get(
+router.post(
   API_ROUTES.ORDER.CHECK_COURIER,
   [
     commonValidations.validateDeliveryPostcode("delivery_postcode"),
@@ -47,13 +47,13 @@ router.get(
   checkCouierService
 );
 
-router.get(
+router.post(
   API_ROUTES.ORDER.FETCH_BY_ORDER_ID,
   [commonValidations.orderId("order_id"), handleValidationErrors],
   findOrderByOrderId
 );
 
-router.get(
+router.post(
   API_ROUTES.ORDER.FETCH_BY_USER_ID,
   [commonValidations.userId("user_id"), , handleValidationErrors],
   findOrderByUserId

@@ -527,7 +527,7 @@ const signIn = async (req, res) => {
     // Prepare comprehensive user response as per specification
     const userResponse = {
       basic_details: {
-        profile_pic_url: user.basic_details.profile_pic_url || "",
+        profile_pic: user.basic_details.profile_pic || "",
         first_name: user.basic_details.first_name || "",
         last_name: user.basic_details.last_name || "",
         phone_number: user.basic_details.phone_number || "",
@@ -548,14 +548,7 @@ const signIn = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
-      },
-      address_book: user.address_book || [],
-      chat_box: user.chat_box || [],
-      emergency_contacts: user.emergency_contacts || [],
-      garage: {
-        security_code: user.garage?.security_code || "",
-        vehicles: user.garage?.vehicles || [],
-      },
+      }
     };
 
     res.status(200).json({
@@ -833,7 +826,7 @@ const verifyLoginOtp = async (req, res) => {
     };
 
     res.status(200).json({
-      status: "success",
+      status: true,
       message: ERROR_MESSAGES.OTP_VERIFIED_SUCCESS,
       user: userResponse,
       token: token,

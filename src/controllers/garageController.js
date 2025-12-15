@@ -148,7 +148,6 @@ const addVehicle = async (req, res) => {
   }
 };
 
-
 /**
  * Fetch vehicle data from RTO API
  * Makes actual API call to RTO service
@@ -369,37 +368,26 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
 const getGarage = async (req, res) => {
   try {
     const { user_id } = req.params;
-    // Find user by email or phone number
-    let user;
-    // Check if user_id is an email (contains @) or phone number
-    if (user_id.includes("@")) {
-      // Search by email
-      user = await User.findOne({
-        "basic_details.email": user_id.toLowerCase(),
-      });
-    } else {
-      // Search by phone number
-      user = await User.findOne({ "basic_details.phone_number": user_id });
-    }
+
+    const user = await User.findById(user_id).select("garage");
+
     if (!user) {
       return res.status(404).json({
         status: false,
-        message: ERROR_MESSAGES.USER_NOT_FOUND,
+        message: "User not found",
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
-      message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
-      data: {
-        garage: user.garage || { security_code: "", vehicles: [] },
-      },
+      message: "Garage fetched successfully",
+      data: user.garage || { security_code: "", vehicles: [] },
     });
   } catch (error) {
     console.error("Get garage error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
-      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+      message: "Internal server error",
     });
   }
 };
