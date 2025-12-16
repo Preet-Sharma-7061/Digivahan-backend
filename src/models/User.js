@@ -12,7 +12,12 @@ const addressSchema = new mongoose.Schema({
     // required: true,
     trim: true,
   },
-  house_no_or_building: {
+  house_no_building: {
+    type: String,
+    // required: true,
+    trim: true,
+  },
+  street_name: {
     type: String,
     // required: true,
     trim: true,
@@ -78,253 +83,145 @@ const emergencyContactSchema = new mongoose.Schema({
   },
 });
 
-const vehicleDocumentSchema = new mongoose.Schema({
-  insurance: {
-    file_url: {
-      type: String,
-      default: "",
-    },
-  },
-  pollution: {
-    file_url: {
-      type: String,
-      default: "",
-    },
-  },
-  registration: {
-    file_url: {
-      type: String,
-      default: "",
-    },
-  },
-  fitness: {
-    file_url: {
-      type: String,
-      default: "",
-    },
-  },
-  permit: {
-    file_url: {
-      type: String,
-      default: "",
-    },
-  },
-  other_documents: [
-    {
-      doc_name: {
-        type: String,
-        // required: true,
-      },
-      doc_number: {
-        type: String,
-        // required: true,
-      },
-      doc_url: {
-        type: String,
-        // required: true,
-      },
-    },
-  ],
-});
-
-const vehicleInfoSchema = new mongoose.Schema({
-  owner_name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  vehicle_number: {
-    type: String,
-    // required: true,
-    trim: true,
-    // unique: true,
-  },
-  vehicle_name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  registration_date: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  ownership_details: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  financer_name: {
-    type: Object || String,
-    trim: true,
-  },
-  registered_rto: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  makers_model: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  makers_name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  vehicle_class: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  fuel_type: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  fuel_norms: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  engine: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  chassis_number: {
-    type: String,
-    // required: true,
-    trim: true,
-    // unique: true,
-  },
-  insurer_name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  insurance_type: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  insurance_expiry: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  insurance_renewed_date: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  vehicle_age: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  fitness_upto: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  pollution_renew_date: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  pollution_expiry: {
-    type: Date,
-    default: null,
-    // required: true,
-  },
-  color: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  unloaded_weight: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  rc_status: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  insurance_policy_number: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-});
-
 const vehicleSchema = new mongoose.Schema({
   vehicle_id: {
     type: String,
-    // required: true,
-    // unique: true,
+    required: true,
   },
-  vehicle_info: vehicleInfoSchema,
-  vehicle_documents: vehicleDocumentSchema,
+
+  api_data: mongoose.Schema.Types.Mixed,
+
+  vehicle_doc: {
+    security_code: {
+      type: String,
+      default: "",
+    },
+
+    documents: [
+      {
+        doc_name: { type: String, required: true },
+        doc_type: {
+          type: String,
+          enum: ["aadhar", "polution", "insurance", "rc"],
+          required: true,
+        },
+        doc_number: { type: String, required: true },
+        doc_url: { type: String, required: true },
+        public_id: { type: String, default: "" },
+      },
+    ],
+  },
 });
 
+
 const garageSchema = new mongoose.Schema({
-  security_code: {
-    type: String,
-    default: "",
-  },
   vehicles: [vehicleSchema],
 });
 
-const notificationSchema = new mongoose.Schema({
-  notification_id: {
-    type: String,
-    // required: true,
-    // unique: true,
+const userMyOrderSchema = new mongoose.Schema(
+  {
+    order_id: { type: mongoose.Schema.Types.ObjectId, ref: "Order" }, // Reference to main Order schema
+    order_data: mongoose.Schema.Types.Mixed, // Stores full order object
   },
-  sender_id: {
-    type: String,
-    // required: true,
+  { timestamps: true }
+);
+
+const notificationSchema = new mongoose.Schema(
+  {
+    sender_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    sender_pic: {
+      type: String,
+      default: "",
+    },
+
+    name: {
+      type: String,
+      trim: true,
+    },
+
+    time: {
+      type: Date,
+      default: Date.now,
+    },
+
+    notification_type: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    notification_title: {
+      type: String,
+      trim: true,
+    },
+
+    link: {
+      type: String,
+      default: "",
+    },
+
+    vehicle_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vehicle",
+      default: null,
+    },
+
+    order_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
+
+    message: {
+      type: String,
+      default: "",
+    },
+
+    issue_type: {
+      type: String,
+      default: "",
+    },
+
+    chat_room_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+    },
+
+    latitude: {
+      type: String,
+      default: "",
+    },
+
+    longitude: {
+      type: String,
+      default: "",
+    },
+
+    incident_proof: [
+      {
+        type: String, // Cloudinary URL / file path
+      },
+    ],
+
+    inapp_notification: {
+      type: Boolean,
+      default: true,
+    },
   },
-  sender_pic_url: {
-    type: String,
-    default: "",
-  },
-  name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  time: {
-    type: Date || String,
-    // required: true,
-  },
-  notification_type: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  notification_text: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  link: {
-    type: String,
-    default: "",
-  },
-  vehicle_or_item_id: {
-    type: String,
-    default: "",
-  },
-});
+  {
+    timestamps: true, // createdAt & updatedAt
+  }
+);
 
 const userSchema = new mongoose.Schema({
   basic_details: {
-    profile_pic_url: { type: String, default: "" },
+    profile_pic: { type: String, default: "" },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
     phone_number: { type: String, trim: true, unique: true },
@@ -338,7 +235,7 @@ const userSchema = new mongoose.Schema({
     profile_completion_percent: { type: Number, default: 0, min: 0, max: 100 },
   },
   public_details: {
-    public_pic_url: { type: String, default: "" },
+    public_pic: { type: String, default: "" },
     nick_name: { type: String, default: "" },
     address: { type: String, default: "" },
     age: { type: Number, default: 0 },
@@ -358,9 +255,43 @@ const userSchema = new mongoose.Schema({
     is_tracking_on: { type: Boolean, default: false },
   },
   notifications: [notificationSchema],
-  my_orders: [{ type: String }],
+  my_orders: [userMyOrderSchema],
   address_book: [addressSchema],
-  chat_box: [{ type: String }],
+  chat_box: [
+    {
+      roomId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Room",
+        required: true,
+      },
+
+      type: {
+        type: String,
+        enum: ["direct", "group"],
+        required: true,
+      },
+
+      lastMessage: {
+        type: String,
+        default: "",
+      },
+
+      // 🔥 Full members object (same as Room.members)
+      members: [
+        {
+          user_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+          },
+          first_name: { type: String, default: "" },
+          last_name: { type: String, default: "" },
+          profile_pic_url: { type: String, default: "" },
+          role: { type: String, default: "user" }, // same as room
+        },
+      ],
+    },
+  ],
   emergency_contacts: [emergencyContactSchema],
   garage: garageSchema,
   is_active: { type: Boolean, default: true },

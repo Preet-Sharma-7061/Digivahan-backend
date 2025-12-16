@@ -26,11 +26,13 @@ const AddEmergencyContact = async (req, res) => {
     await user.save();
 
     res.status(200).json({
+      status: true,
       message: "Emergency contact added successfully",
       emergency_contacts: user.emergency_contacts,
     });
   } catch (error) {
     console.log(error);
+    status: true,
     res.status(500).json({ message: "Internal server error" });
   }
 };

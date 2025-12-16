@@ -243,7 +243,7 @@ const verifyOtp = async (req, res) => {
         is_phone_number_primary: tempUser.otp_channel === "PHONE",
         is_email_verified: tempUser.otp_channel === "EMAIL",
         is_email_primary: tempUser.otp_channel === "EMAIL",
-        profile_completion_percent: 20, // Basic info completed
+        profile_completion_percent: 20,
       },
       public_details: {
         nick_name: "",
@@ -258,7 +258,10 @@ const verifyOtp = async (req, res) => {
         previous_password4: "",
       },
       live_tracking: {
-        is_tracking_on: true, // Set to true as per new spec
+        is_tracking_on: true,
+      },
+      garage: {
+        vehicles: [], // 🔥 VERY IMPORTANT
       },
       is_active: true,
     });
@@ -274,7 +277,7 @@ const verifyOtp = async (req, res) => {
     // Prepare user response (without sensitive data) - simplified as per new spec
     const userResponse = {
       basic_details: {
-        profile_pic_url: newUser.basic_details.profile_pic_url,
+        profile_pic: newUser.basic_details.profile_pic,
         first_name: newUser.basic_details.first_name,
         last_name: newUser.basic_details.last_name,
         phone_number: newUser.basic_details.phone_number,
@@ -527,7 +530,7 @@ const signIn = async (req, res) => {
     // Prepare comprehensive user response as per specification
     const userResponse = {
       basic_details: {
-        profile_pic_url: user.basic_details.profile_pic_url || "",
+        profile_pic: user.basic_details.profile_pic || "",
         first_name: user.basic_details.first_name || "",
         last_name: user.basic_details.last_name || "",
         phone_number: user.basic_details.phone_number || "",
@@ -548,13 +551,6 @@ const signIn = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
-      },
-      address_book: user.address_book || [],
-      chat_box: user.chat_box || [],
-      emergency_contacts: user.emergency_contacts || [],
-      garage: {
-        security_code: user.garage?.security_code || "",
-        vehicles: user.garage?.vehicles || [],
       },
     };
 
@@ -798,7 +794,7 @@ const verifyLoginOtp = async (req, res) => {
     // Prepare comprehensive user response as per specification
     const userResponse = {
       basic_details: {
-        profile_pic_url: user.basic_details.profile_pic_url || "",
+        profile_pic: user.basic_details.profile_pic || "",
         first_name: user.basic_details.first_name || "",
         last_name: user.basic_details.last_name || "",
         phone_number: user.basic_details.phone_number || "",
@@ -833,7 +829,7 @@ const verifyLoginOtp = async (req, res) => {
     };
 
     res.status(200).json({
-      status: "success",
+      status: true,
       message: ERROR_MESSAGES.OTP_VERIFIED_SUCCESS,
       user: userResponse,
       token: token,
@@ -1091,7 +1087,7 @@ const verifyResetOtp = async (req, res) => {
     // Prepare comprehensive user response as per specification
     const userResponse = {
       basic_details: {
-        profile_pic_url: user.basic_details.profile_pic_url || "",
+        profile_pic: user.basic_details.profile_pic || "",
         first_name: user.basic_details.first_name || "",
         last_name: user.basic_details.last_name || "",
         phone_number: user.basic_details.phone_number || "",
@@ -1421,7 +1417,7 @@ const RequestPrimaryContact = async (req, res) => {
   }
 };
 
-// Verify OTP for set the recent primary Contact No. 
+// Verify OTP for set the recent primary Contact No.
 
 const VerifyOTPforsetPrimaryContact = async (req, res) => {
   try {
@@ -1432,8 +1428,8 @@ const VerifyOTPforsetPrimaryContact = async (req, res) => {
     }
 
     // 1️⃣ Find OTP entry using user_registered_id (ObjectId)
-    const otpRecord = await PrimaryOTP.findOne({ 
-      user_registered_id: user_id 
+    const otpRecord = await PrimaryOTP.findOne({
+      user_registered_id: user_id,
     });
 
     if (!otpRecord) {
@@ -1456,8 +1452,7 @@ const VerifyOTPforsetPrimaryContact = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
- 
-      // 5️⃣ UPDATE PRIMARY CONTACT
+    // 5️⃣ UPDATE PRIMARY CONTACT
     if (otpRecord.set_primary === "phone") {
       user.basic_details.is_phone_number_primary = true;
       user.basic_details.is_email_primary = false;
@@ -1474,15 +1469,13 @@ const VerifyOTPforsetPrimaryContact = async (req, res) => {
     await PrimaryOTP.deleteOne({ _id: otpRecord._id });
 
     return res.status(200).json({
-      message: `Primary ${otpRecord.set_primary} updated successfully`
+      message: `Primary ${otpRecord.set_primary} updated successfully`,
     });
-
   } catch (error) {
     console.error("Error verifying OTP:", error);
     return res.status(500).json({ message: "Internal Server Error", error });
   }
 };
-
 
 /**
  * Suspend User - Suspend a user for a specific time period

@@ -1,3 +1,4 @@
+const { response } = require("express");
 const User = require("../models/User");
 
 const UpdateUserDetails = async (req, res) => {
@@ -25,6 +26,16 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
+
+    // 4️⃣ If images uploaded → save Cloudinary URLs
+    if (req.files?.profile_pic?.[0]?.path) {
+      user.basic_details.profile_pic = req.files.profile_pic[0].path;
+    }
+
+    if (req.files?.public_pic?.[0]?.path) {
+      user.public_details.public_pic = req.files.public_pic[0].path;
+    }
+
     // 2️⃣ Update basic details
     if (first_name) user.basic_details.first_name = first_name;
     if (last_name) user.basic_details.last_name = last_name;
@@ -38,11 +49,6 @@ const UpdateUserDetails = async (req, res) => {
     if (age) user.public_details.age = age;
     if (gender) user.public_details.gender = gender;
 
-    // 4️⃣ If profile image uploaded → save Cloudinary URL
-    if (req.file && req.file.path) {
-      user.basic_details.profile_pic_url = req.file.path;
-    }
-
     // 5️⃣ Save updates
     await user.save();
 
@@ -50,6 +56,8 @@ const UpdateUserDetails = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "User details updated successfully.",
+      basic_details: user.basic_details,
+      public_details: user.public_details,
     });
   } catch (error) {
     console.error("UpdateUserDetails error:", error);
@@ -92,7 +100,7 @@ const getUserDetails = async (req, res) => {
       "deletion_date",
       "is_active",
       "is_logged_in",
-      "all"
+      "all",
     ];
 
     if (!validTypes.includes(details_type)) {
@@ -124,7 +132,7 @@ const getUserDetails = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "Full user details",
-        data: user
+        data: user,
       });
     }
 
@@ -134,13 +142,13 @@ const getUserDetails = async (req, res) => {
     if (details_type === "basic_details") {
       const cleanBasic = {
         ...user.basic_details,
-        password: undefined // hide password
+        password: undefined, // hide password
       };
 
       return res.status(200).json({
         success: true,
         message: "Basic details fetched",
-        data: cleanBasic
+        data: cleanBasic,
       });
     }
 
@@ -152,7 +160,7 @@ const getUserDetails = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "Suspension reason fetched",
-        data: { suspension_reason: user.suspension_reason }
+        data: { suspension_reason: user.suspension_reason },
       });
     }
 
@@ -160,25 +168,22 @@ const getUserDetails = async (req, res) => {
     // GENERIC CASE (public_details, garage, address_book etc.)
     // Return that single field
     // ----------------------------------------------------
-    const data = user[details_type];  // dynamic access: user["public_details"]
+    const data = user[details_type]; // dynamic access: user["public_details"]
 
     return res.status(200).json({
       success: true,
       message: `${details_type} fetched`,
-      data: data || null
+      data: data || null,
     });
-
   } catch (error) {
     console.log("getUserDetails error →", error);
 
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
-
 
 module.exports = { UpdateUserDetails, getUserDetails };

@@ -1,167 +1,92 @@
-const Message = require("../models/message");
-const Chat = require("../models/Chat");
+const Room = require("../models/RoomSchema");
 
-/**
- * Socket.io Connection Handler
- */
 const setupSocketIO = (io) => {
-  // Authentication middleware for socket
-  io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    const userId = socket.handshake.auth.userId;
-
-    if (!userId) {
-      return next(new Error("Authentication error"));
-    }
-
-    socket.userId = userId;
-    next();
-  });
-
   io.on("connection", (socket) => {
-    console.log("User connected:", socket.userId);
-
-    // Join user to their personal room
-    socket.join(`user_${socket.userId}`);
+    console.log("New user connected");
 
     /**
-     * Join Chat Room
+     * USER JOINS ROOM
      */
-    socket.on("joinRoom", async ({ chatId }) => {
-      try {
-        socket.join(chatId);
-        console.log(`User ${socket.userId} joined chat ${chatId}`);
+    socket.on("join_room", async ({ roomId, userId }) => {
+      socket.userId = userId;
 
-        // Mark messages as delivered when joining
-        await Message.markAsDelivered(socket.userId, chatId);
-      } catch (error) {
-        console.error("Join room error:", error);
+      try {
+        let room = await Room.findById(roomId);
+
+        if (!room) {
+          return console.log("❌ Room not found");
+        }
+
+        // Convert userId to string for safer matching
+        const isMember = room.members.some(
+          (m) => m.user_id.toString() === userId.toString()
+        );
+
+        if (!isMember) {
+          return console.log(
+            `❌ User ${userId} is NOT part of this room (not allowed to join)`
+          );
+        }
+
+        // Join the socket room
+        socket.join(roomId);
+
+        // Send updated members to frontend
+        const formattedMembers = room.members.map((m) => ({
+          user_id: m.user_id,
+          first_name: m.first_name,
+          last_name: m.last_name,
+          profile_pic_url: m.profile_pic_url,
+          role: m.role,
+        }));
+
+        io.to(roomId).emit("room_members", formattedMembers);
+
+        console.log(`✅ User ${userId} joined room ${roomId}`);
+      } catch (err) {
+        console.error("Error joining room:", err);
       }
     });
 
     /**
-     * Leave Chat Room
+     * SEND MESSAGE TO ROOM MEMBERS
      */
-    socket.on("leaveRoom", ({ chatId }) => {
-      socket.leave(chatId);
-      console.log(`User ${socket.userId} left chat ${chatId}`);
-    });
-
-    /**
-     * Send Message
-     */
-    socket.on("sendMessage", async (data) => {
+    socket.on("send_message", async ({ roomId, message }) => {
       try {
-        const { chatId, senderId, receiverId, message, attachments } = data;
+        const room = await Room.findById(roomId);
 
-        // Validate required fields
-        if (!chatId || !senderId || !receiverId || !message) {
-          socket.emit("error", { message: "Invalid message data" });
+        if (!room) return;
+
+        // Validate that sender is in the room
+        const isMember = room.members.some(
+          (m) => m.user_id.toString() === socket.userId.toString()
+        );
+
+        if (!isMember) {
+          console.log("❌ Sender is not a member of room");
           return;
         }
 
-        // Create message in database
-        const newMessage = new Message({
-          chatId,
-          senderId,
-          receiverId,
-          message: message.trim(),
-          attachments: attachments || [],
-          status: "sent",
-          timestamp: new Date(),
+        // Emit message to all members inside the room
+        io.to(roomId).emit("receive_message", {
+          roomId,
+          from: socket.userId,
+          message,
         });
 
-        await newMessage.save();
-
-        // Update chat last message
-        await Chat.findByIdAndUpdate(
-          chatId,
-          {
-            lastMessage: {
-              text: message,
-              timestamp: new Date(),
-            },
-            updated_at: new Date(),
-          },
-          { new: true }
-        );
-
-        // Emit to receiver
-        io.to(chatId).emit("receiveMessage", newMessage);
-
-        // Also emit to sender for confirmation
-        socket.emit("messageSent", {
-          messageId: newMessage._id,
-          status: "sent",
-        });
-      } catch (error) {
-        console.error("Send message error:", error);
-        socket.emit("error", { message: "Failed to send message" });
+        console.log(`📨 Message sent in room ${roomId}`);
+      } catch (err) {
+        console.error("Error sending message:", err);
       }
     });
 
     /**
-     * Mark Message as Delivered
-     */
-    socket.on("messageDelivered", async ({ chatId, messageId }) => {
-      try {
-        if (messageId) {
-          await Message.findByIdAndUpdate(messageId, {
-            $set: { status: "delivered" },
-          });
-          io.to(chatId).emit("statusUpdated", {
-            messageId,
-            status: "delivered",
-          });
-        }
-      } catch (error) {
-        console.error("Mark delivered error:", error);
-      }
-    });
-
-    /**
-     * Mark Message as Seen
-     */
-    socket.on("messageSeen", async ({ chatId }) => {
-      try {
-        await Message.markAsSeen(socket.userId, chatId);
-        io.to(chatId).emit("messagesSeen", { userId: socket.userId, chatId });
-      } catch (error) {
-        console.error("Mark seen error:", error);
-      }
-    });
-
-    /**
-     * Typing Indicator
-     */
-    socket.on("typing", ({ chatId, isTyping }) => {
-      socket.to(chatId).emit("userTyping", { userId: socket.userId, isTyping });
-    });
-
-    /**
-     * User Online Status
-     */
-    socket.on("userOnline", () => {
-      io.emit("userStatusUpdate", { userId: socket.userId, status: "online" });
-    });
-
-    /**
-     * User Offline Status
-     */
-    socket.on("userOffline", () => {
-      io.emit("userStatusUpdate", { userId: socket.userId, status: "offline" });
-    });
-
-    /**
-     * Disconnect Handler
+     * DISCONNECT
      */
     socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.userId);
-      io.emit("userStatusUpdate", { userId: socket.userId, status: "offline" });
+      console.log(`User ${socket.userId} disconnected`);
     });
   });
-
-  return io;
 };
 
 module.exports = { setupSocketIO };
