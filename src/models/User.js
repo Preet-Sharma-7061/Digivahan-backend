@@ -87,7 +87,6 @@ const vehicleSchema = new mongoose.Schema({
   vehicle_id: {
     type: String,
     required: true,
-    unique: true,
   },
 
   api_data: mongoose.Schema.Types.Mixed,
@@ -95,41 +94,25 @@ const vehicleSchema = new mongoose.Schema({
   vehicle_doc: {
     security_code: {
       type: String,
-      // required: true,
       default: "",
     },
 
     documents: [
       {
-        doc_name: {
-          type: String,
-          required: true,
-        },
-
+        doc_name: { type: String, required: true },
         doc_type: {
           type: String,
           enum: ["aadhar", "polution", "insurance", "rc"],
           required: true,
         },
-
-        doc_number: {
-          type: String,
-          required: true,
-        },
-
-        doc_url: {
-          type: String,
-          required: true,
-        },
-
-        public_id: {
-          type: String,
-          default: "",
-        },
+        doc_number: { type: String, required: true },
+        doc_url: { type: String, required: true },
+        public_id: { type: String, default: "" },
       },
     ],
   },
 });
+
 
 const garageSchema = new mongoose.Schema({
   vehicles: [vehicleSchema],
