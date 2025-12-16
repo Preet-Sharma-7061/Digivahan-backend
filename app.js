@@ -11,6 +11,13 @@ const {
 const startDeletionCron = require('./src/utils/cronJobs.js')
 
 // Import routes
+// Hasan Code
+const appInfoRoutes = require("./src/routes/appInfo.routes");
+const fuelRoutes = require('./src/routes/fuel.routes');
+const uploadRoutes = require('./src/routes/upload.routes');
+const deleteImageRoutes = require('./src/routes/deleteImage.routes');
+
+// Hasan Code End Here
 const authRoutes = require("./src/routes/auth.routes.js");
 const profileDeletation = require("./src/routes/profileDeletation.routes.js");
 const profileUpdateRoutes = require('./src/routes/profileUpdate.routes.js');
@@ -42,6 +49,13 @@ app.use(async (req, res, next) => {
   }
 });
 
+// Hasan Code 
+app.use(appInfoRoutes);
+app.use(fuelRoutes);
+app.use(uploadRoutes);
+app.use(deleteImageRoutes);
+
+// Hasan Code End Here
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
