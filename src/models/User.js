@@ -12,7 +12,12 @@ const addressSchema = new mongoose.Schema({
     // required: true,
     trim: true,
   },
-  house_no_or_building: {
+  house_no_building: {
+    type: String,
+    // required: true,
+    trim: true,
+  },
+  street_name: {
     type: String,
     // required: true,
     trim: true,
@@ -79,33 +84,51 @@ const emergencyContactSchema = new mongoose.Schema({
 });
 
 const vehicleSchema = new mongoose.Schema({
-  vehicle_id: String,
-  api_data: mongoose.Schema.Types.Mixed, // <-- ANY data will be accepted
-  vehicle_doc: [
-    {
-      doc_name: {
-        type: String,
-        required: true,
-      },
-      doc_type: {
-        type: String,
-        enum: ["aadhar", "polution", "insurance", "rc"], // ENUM VALIDATION
-        required: true,
-      },
-      doc_number: {
-        type: String,
-        required: true,
-      },
-      doc_url: {
-        type: String,
-        required: true,
-      },
-      public_id: {
-        type: String,
-        default: "",
-      },
+  vehicle_id: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+
+  api_data: mongoose.Schema.Types.Mixed,
+
+  vehicle_doc: {
+    security_code: {
+      type: String,
+      // required: true,
+      default: "",
     },
-  ],
+
+    documents: [
+      {
+        doc_name: {
+          type: String,
+          required: true,
+        },
+
+        doc_type: {
+          type: String,
+          enum: ["aadhar", "polution", "insurance", "rc"],
+          required: true,
+        },
+
+        doc_number: {
+          type: String,
+          required: true,
+        },
+
+        doc_url: {
+          type: String,
+          required: true,
+        },
+
+        public_id: {
+          type: String,
+          default: "",
+        },
+      },
+    ],
+  },
 });
 
 const garageSchema = new mongoose.Schema({
@@ -120,48 +143,98 @@ const userMyOrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const notificationSchema = new mongoose.Schema({
-  notification_id: {
-    type: String,
-    // required: true,
-    // unique: true,
+const notificationSchema = new mongoose.Schema(
+  {
+    sender_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    sender_pic: {
+      type: String,
+      default: "",
+    },
+
+    name: {
+      type: String,
+      trim: true,
+    },
+
+    time: {
+      type: Date,
+      default: Date.now,
+    },
+
+    notification_type: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    notification_title: {
+      type: String,
+      trim: true,
+    },
+
+    link: {
+      type: String,
+      default: "",
+    },
+
+    vehicle_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vehicle",
+      default: null,
+    },
+
+    order_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
+
+    message: {
+      type: String,
+      default: "",
+    },
+
+    issue_type: {
+      type: String,
+      default: "",
+    },
+
+    chat_room_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+    },
+
+    latitude: {
+      type: String,
+      default: "",
+    },
+
+    longitude: {
+      type: String,
+      default: "",
+    },
+
+    incident_proof: [
+      {
+        type: String, // Cloudinary URL / file path
+      },
+    ],
+
+    inapp_notification: {
+      type: Boolean,
+      default: true,
+    },
   },
-  sender_id: {
-    type: String,
-    // required: true,
-  },
-  sender_pic_url: {
-    type: String,
-    default: "",
-  },
-  name: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  time: {
-    type: Date || String,
-    // required: true,
-  },
-  notification_type: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  notification_text: {
-    type: String,
-    // required: true,
-    trim: true,
-  },
-  link: {
-    type: String,
-    default: "",
-  },
-  vehicle_or_item_id: {
-    type: String,
-    default: "",
-  },
-});
+  {
+    timestamps: true, // createdAt & updatedAt
+  }
+);
 
 const userSchema = new mongoose.Schema({
   basic_details: {

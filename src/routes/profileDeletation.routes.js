@@ -13,7 +13,7 @@ const { authenticateToken } = require("../middleware/auth.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
-router.delete(
+router.post(
   API_ROUTES.USER.PROCESS_DELETIONS,
   authenticateToken,
   [

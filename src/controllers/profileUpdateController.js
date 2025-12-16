@@ -56,8 +56,8 @@ const UpdateUserDetails = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "User details updated successfully.",
-      basic_details: user.public_details,
-      public_details: user.basic_details,
+      basic_details: user.basic_details,
+      public_details: user.public_details,
     });
   } catch (error) {
     console.error("UpdateUserDetails error:", error);

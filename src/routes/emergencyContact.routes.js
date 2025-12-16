@@ -37,7 +37,7 @@ router.put(
   UpdateUserEmergencyContact
 );
 
-router.delete(
+router.post(
   API_ROUTES.EMERGENCY_CONTACT.DELETE_CONTACT,
   authenticateToken,
   [

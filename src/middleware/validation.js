@@ -349,6 +349,26 @@ const commonValidations = {
       .withMessage(VALIDATION_MESSAGES.USER_ID_LENGTH);
   },
 
+  // Sender ID validation
+  senderId: (field = "sender_id") => {
+    const { body } = require("express-validator");
+    return body(field)
+      .notEmpty()
+      .withMessage("Sender_Id is Required! ")
+      .isLength({ min: 1, max: 100 })
+      .withMessage("sender_id must be between 1 and 100 characters");
+  },
+
+  // Sender ID validation
+  receiverId: (field = "receiver_id") => {
+    const { body } = require("express-validator");
+    return body(field)
+      .notEmpty()
+      .withMessage("Receiver_id is Required! ")
+      .isLength({ min: 1, max: 100 })
+      .withMessage("receiver_id must be between 1 and 100 characters");
+  },
+
   // User ID validation
   orderId: (field = "order_id") => {
     const { body } = require("express-validator");

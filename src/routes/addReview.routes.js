@@ -19,7 +19,7 @@ router.post(
   addUserReview
 )
 
-router.get(
+router.post(
   API_ROUTES.REVIEW.USER_FEEDBACK,
   [
     commonValidations.productType("product_type"),

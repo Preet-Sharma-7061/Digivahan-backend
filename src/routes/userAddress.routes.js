@@ -33,7 +33,7 @@ router.put(
     UpdateUserAddress
 )
 
-router.delete(
+router.post(
     API_ROUTES.ADDRESSBOOK.DELETE_ADDRESS,
     authenticateToken,
     [

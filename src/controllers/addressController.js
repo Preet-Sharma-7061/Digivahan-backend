@@ -8,6 +8,7 @@ const UserAddAddress = async (req, res) => {
       contact_no,
       house_no_building,
       road_or_area,
+      street_name,
       pincode,
       city,
       state,
@@ -28,6 +29,7 @@ const UserAddAddress = async (req, res) => {
       contact_no,
       house_no_building,
       road_or_area,
+      street_name,
       pincode,
       city,
       state,
@@ -122,17 +124,18 @@ const UpdateUserAddress = async (req, res) => {
     await user.save();
 
     return res.status(200).json({
+      status: true,
       message: "Address updated successfully",
       address_book: user.address_book,
     });
   } catch (error) {
     return res.status(500).json({
+      status: true,
       message: "Internal Server Error",
       error: error.message,
     });
   }
 };
-
 
 const DeleteUserAddress = async (req, res) => {
   try {
@@ -167,7 +170,6 @@ const DeleteUserAddress = async (req, res) => {
       message: "Address deleted successfully",
       address_book: user.address_book,
     });
-
   } catch (error) {
     return res.status(500).json({
       status: false,

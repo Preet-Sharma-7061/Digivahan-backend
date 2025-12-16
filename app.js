@@ -22,6 +22,7 @@ const uploadVehicleDoc = require("./src/routes/uploadvehicleDoc.routes.js");
 const userReviewroutes = require("./src/routes/addReview.routes.js");
 const userOrderRoutes = require("./src/routes/order.routes.js");
 const roomRoutes = require("./src/routes/rooom.routes.js");
+const notificationRoutes = require("./src/routes/notification.routes.js");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -48,13 +49,13 @@ app.use(API_ROUTES.UPLOAD.BASE, uploadVehicleDoc);
 app.use(API_ROUTES.REVIEW.BASE, userReviewroutes);
 app.use(API_ROUTES.ORDER.BASE, userOrderRoutes);
 app.use(API_ROUTES.CHAT.BASE, roomRoutes);
+app.use(API_ROUTES.NOTIFICATION.BASE, notificationRoutes);
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
-
 
 // -------------------- SERVER SETUP --------------------
 const PORT = process.env.PORT || 3000;
@@ -76,8 +77,8 @@ setupSocketIO(io);
 // -------------------- DATABASE CONNECTION --------------------
 (async () => {
   try {
-    await connectDB();       // Connect to MongoDB
-    startDeletionCron();     // Start cron jobs
+    await connectDB(); // Connect to MongoDB
+    startDeletionCron(); // Start cron jobs
     console.log("Database connected and cron jobs started ✅");
   } catch (error) {
     console.error("Startup error:", error);

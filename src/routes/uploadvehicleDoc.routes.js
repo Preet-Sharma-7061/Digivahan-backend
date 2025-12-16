@@ -25,7 +25,7 @@ router.post(
   UploadvehicleDoc
 );
 
-router.delete(
+router.post(
   API_ROUTES.UPLOAD.FILE_UPLOAD.DOC_DELETE,
   [
     commonValidations.userId("user_id"),
