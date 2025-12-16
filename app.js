@@ -4,7 +4,6 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 
-<<<<<<< HEAD
 // Import routes
 // Hasan Code
 const appInfoRoutes = require("./src/routes/appInfo.routes");
@@ -12,8 +11,7 @@ const fuelRoutes = require('./src/routes/fuel.routes');
 const uploadRoutes = require('./src/routes/upload.routes');
 const deleteImageRoutes = require('./src/routes/deleteImage.routes');
 
-// Hasan Code End Here
-=======
+// Hasan Code End Her
 // Database and utils
 const connectDB = require("./db_config/index.js");
 const startDeletionCron = require("./src/utils/cronJobs.js");
@@ -22,7 +20,7 @@ const startDeletionCron = require("./src/utils/cronJobs.js");
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
->>>>>>> f801296a26a9212ba7efc618e0461b2451ab7547
+
 const authRoutes = require("./src/routes/auth.routes.js");
 const profileDeletation = require("./src/routes/profileDeletation.routes.js");
 const profileUpdateRoutes = require("./src/routes/profileUpdate.routes.js");
@@ -49,7 +47,6 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // const { requestLogger } = require("./src/middleware/logger.js");
 // app.use(requestLogger);
 
-<<<<<<< HEAD
 // Database connection middleware jdhfhf
 app.use(async (req, res, next) => {
   try {
@@ -73,9 +70,7 @@ app.use(uploadRoutes);
 app.use(deleteImageRoutes);
 
 // Hasan Code End Here
-=======
-// -------------------- ROUTES --------------------
->>>>>>> f801296a26a9212ba7efc618e0461b2451ab7547
+// -------------------- ROUTES -------------------
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
