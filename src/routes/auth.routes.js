@@ -21,6 +21,7 @@ const {
   verifyConfirm,
   RequestPrimaryContact,
   VerifyOTPforsetPrimaryContact,
+  ChangeUserpassword,
   suspendUser,
   removeUserSuspension,
 } = require("../controllers/authController.js");
@@ -181,6 +182,17 @@ router.post(
   ],
   VerifyOTPforsetPrimaryContact
 );
+
+// Change User Password - Change the user password with old password
+
+router.post(
+  API_ROUTES.AUTH.PASSWORD_RESET.CHANGE_PASSWORD,
+  [
+    commonValidations.userId("user_id"),
+    handleValidationErrors
+  ],
+  ChangeUserpassword
+)
 
 // Suspend User - Suspend a user for a specific time period
 router.post(

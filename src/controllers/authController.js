@@ -199,7 +199,7 @@ const checkRegisteredUser = async (req, res) => {
 };
 
 /**
- * Verify OTP - Step 2: Verify OTP and create user account
+ * Verify OTP - Step 3: Verify OTP and create user account
  * POST /api/auth/register/verify-otp
  */
 const verifyOtp = async (req, res) => {
@@ -310,102 +310,10 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-const resendOtp = async (req, res) => {
-  try {
-    const { user_register_id } = req.body;
-
-    // Find temp user
-    const tempUser = await TempUser.findByRegisterId(user_register_id);
-
-    if (!tempUser) {
-      return res.status(400).json({
-        status: false,
-        error_type: "userId",
-        message: ERROR_MESSAGES.INVALID_USER_REGISTER_ID,
-      });
-    }
-
-    // Check if max attempts reached
-    if (tempUser.hasReachedMaxAttempts()) {
-      return res.status(429).json({
-        status: false,
-        error_type: "other",
-        message: ERROR_MESSAGES.MAX_ATTEMPTS_REACHED,
-      });
-    }
-
-    // Check if OTP is expired
-    if (tempUser.isOtpExpired()) {
-      return res.status(400).json({
-        status: false,
-        error_type: "OTP",
-        message: ERROR_MESSAGES.OTP_EXPIRED,
-      });
-    }
-
-    // Check daily limit
-    const contact =
-      tempUser.otp_channel === "PHONE" ? tempUser.phone : tempUser.email;
-    const hasReachedLimit = await OTP.hasReachedDailyLimit(contact);
-
-    if (hasReachedLimit) {
-      return res.status(429).json({
-        status: false,
-        error_type: "other",
-        message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
-      });
-    }
-
-    // Generate new OTP
-    const newOtpCode = generateOTP(6);
-
-    // Update temp user with new OTP
-    tempUser.otp_code = newOtpCode;
-    tempUser.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
-    await tempUser.save();
-
-    // Update OTP record
-    await OTP.createOrUpdateOtp(contact, newOtpCode, tempUser.otp_channel);
-
-    // Send new OTP
-    const otpSent = await sendOTP(
-      contact,
-      newOtpCode,
-      tempUser.otp_channel,
-      "signup"
-    );
-
-    if (!otpSent) {
-      return res.status(500).json({
-        status: false,
-        error_type: "other",
-        message: ERROR_MESSAGES.OTP_SEND_FAILED,
-      });
-    }
-
-    // Get today's attempt count
-    const otpRecord = await OTP.getTodayAttempts(contact);
-    const attemptsToday = otpRecord ? otpRecord.attempts_today : 1;
-
-    // Calculate expiry time
-    const validUntil = new Date(Date.now() + 10 * 60 * 1000);
-
-    res.status(200).json({
-      status: true,
-      message: `OTP resent via ${tempUser.otp_channel.toLowerCase()}.`,
-      valid_until: validUntil.toISOString(),
-      attempts_today: attemptsToday,
-      otp_verify_endpoint: "auth/register/verify-otp",
-    });
-  } catch (error) {
-    console.error("Resend OTP error:", error);
-    res.status(500).json({
-      status: false,
-      error_type: "other",
-      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
-    });
-  }
-};
+/**
+ * User SignIn - Step 4: User SignIn when account is created
+ * POST /api/auth/register/resend-otp
+ */
 
 const signIn = async (req, res) => {
   try {
@@ -563,6 +471,212 @@ const signIn = async (req, res) => {
   } catch (error) {
     console.error("Sign in error:", error);
     res.status(500).json({
+      status: false,
+      error_type: "other",
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+/**
+ * Resend OTP - Resend OTP when otp is expired
+ * POST /api/auth/register/resend-otp
+ */
+
+const resendOtp = async (req, res) => {
+  try {
+    const { user_register_id } = req.body;
+
+    // Find temp user
+    const tempUser = await TempUser.findByRegisterId(user_register_id);
+
+    if (!tempUser) {
+      return res.status(400).json({
+        status: false,
+        error_type: "userId",
+        message: ERROR_MESSAGES.INVALID_USER_REGISTER_ID,
+      });
+    }
+
+    // Check if max attempts reached
+    if (tempUser.hasReachedMaxAttempts()) {
+      return res.status(429).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.MAX_ATTEMPTS_REACHED,
+      });
+    }
+
+    // Check if OTP is expired
+    if (tempUser.isOtpExpired()) {
+      return res.status(400).json({
+        status: false,
+        error_type: "OTP",
+        message: ERROR_MESSAGES.OTP_EXPIRED,
+      });
+    }
+
+    // Check daily limit
+    const contact =
+      tempUser.otp_channel === "PHONE" ? tempUser.phone : tempUser.email;
+    const hasReachedLimit = await OTP.hasReachedDailyLimit(contact);
+
+    if (hasReachedLimit) {
+      return res.status(429).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
+      });
+    }
+
+    // Generate new OTP
+    const newOtpCode = generateOTP(6);
+
+    // Update temp user with new OTP
+    tempUser.otp_code = newOtpCode;
+    tempUser.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
+    await tempUser.save();
+
+    // Update OTP record
+    await OTP.createOrUpdateOtp(contact, newOtpCode, tempUser.otp_channel);
+
+    // Send new OTP
+    const otpSent = await sendOTP(
+      contact,
+      newOtpCode,
+      tempUser.otp_channel,
+      "signup"
+    );
+
+    if (!otpSent) {
+      return res.status(500).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.OTP_SEND_FAILED,
+      });
+    }
+
+    // Get today's attempt count
+    const otpRecord = await OTP.getTodayAttempts(contact);
+    const attemptsToday = otpRecord ? otpRecord.attempts_today : 1;
+
+    // Calculate expiry time
+    const validUntil = new Date(Date.now() + 10 * 60 * 1000);
+
+    res.status(200).json({
+      status: true,
+      message: `OTP resent via ${tempUser.otp_channel.toLowerCase()}.`,
+      valid_until: validUntil.toISOString(),
+      attempts_today: attemptsToday,
+      otp_verify_endpoint: "auth/register/verify-otp",
+    });
+  } catch (error) {
+    console.error("Resend OTP error:", error);
+    res.status(500).json({
+      status: false,
+      error_type: "other",
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+/**
+ * Change Password - Update user password
+ * POST /api/auth/register/change-password
+ */
+
+const ChangeUserpassword = async (req, res) => {
+  try {
+    const { user_id, old_password, new_password } = req.body;
+
+    if (!old_password || !new_password) {
+      return res.status(400).json({
+        status: false,
+        error_type: "validation",
+        message: "All fields are required",
+      });
+    }
+
+    // 1️⃣ Find user
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.USER_NOT_FOUND,
+      });
+    }
+
+    // 2️⃣ Check account active
+    if (!user.is_active) {
+      return res.status(401).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
+      });
+    }
+
+    // 3️⃣ Verify old password
+    const isOldPasswordCorrect = await user.comparePassword(old_password);
+    if (!isOldPasswordCorrect) {
+      return res.status(400).json({
+        status: false,
+        error_type: "password",
+        message: ERROR_MESSAGES.INVALID_OLD_PASSWORD,
+      });
+    }
+
+    // 4️⃣ New password should not be same as current
+    const isSamePassword = await user.comparePassword(new_password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        status: false,
+        error_type: "password",
+        message: ERROR_MESSAGES.SAME_PASSWORD,
+      });
+    }
+
+    // 5️⃣ Check against previous passwords
+    const oldPasswords = [
+      user.old_passwords.previous_password1,
+      user.old_passwords.previous_password2,
+      user.old_passwords.previous_password3,
+    ];
+
+    for (const oldPass of oldPasswords) {
+      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
+        return res.status(400).json({
+          status: false,
+          error_type: "password",
+          message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
+        });
+      }
+    }
+
+    // 6️⃣ Shift old passwords
+    user.old_passwords.previous_password3 =
+      user.old_passwords.previous_password2;
+
+    user.old_passwords.previous_password2 =
+      user.old_passwords.previous_password1;
+
+    user.old_passwords.previous_password1 =
+      user.basic_details.password; // current hashed password
+
+    // 7️⃣ Update password
+    user.basic_details.password = new_password;
+    user.is_logged_in = true;
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: ERROR_MESSAGES.PASSWORD_CHANGED_SUCCESSFULLY,
+    });
+
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -1050,8 +1164,7 @@ const verifyResetOtp = async (req, res) => {
     const oldPasswords = [
       user.old_passwords.previous_password1,
       user.old_passwords.previous_password2,
-      user.old_passwords.previous_password3,
-      user.old_passwords.previous_password4,
+      user.old_passwords.previous_password3
     ];
 
     for (const oldPassword of oldPasswords) {
@@ -1065,12 +1178,8 @@ const verifyResetOtp = async (req, res) => {
     }
 
     // Update old passwords (shift previous passwords)
-    user.old_passwords.previous_password4 =
-      user.old_passwords.previous_password3;
-    user.old_passwords.previous_password3 =
-      user.old_passwords.previous_password2;
-    user.old_passwords.previous_password2 =
-      user.old_passwords.previous_password1;
+    user.old_passwords.previous_password3 = user.old_passwords.previous_password2;
+    user.old_passwords.previous_password2 = user.old_passwords.previous_password1;
     user.old_passwords.previous_password1 = user.basic_details.password;
 
     // Update password
@@ -1601,6 +1710,7 @@ module.exports = {
   verifyConfirm,
   RequestPrimaryContact,
   VerifyOTPforsetPrimaryContact,
+  ChangeUserpassword,
   suspendUser,
   removeUserSuspension,
 };

@@ -243,6 +243,7 @@ const ERROR_MESSAGES = {
   INVALID_PHONE: "Please provide a valid phone number",
   INVALID_PASSWORD:
     "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+  INVALID_OLD_PASSWORD: "Old passowrd does'nt match",
   INVALID_OTP: "Invalid or expired OTP",
   INVALID_LOGIN_TYPE: "Login type must be either 'email' or 'phone'",
   INVALID_LOGIN_VIA: "Login via must be either 'email' or 'phone'",
@@ -534,7 +535,7 @@ const INFO_MESSAGES = {
 const VALIDATION_MESSAGES = {
   // Field validation
   VALIDATION_FAILED: "Field is Missing",
-  
+
   // Name validation
   NAME_LENGTH: "Name must be between 2 and 50 characters",
   NAME_PATTERN: "Name can only contain letters and spaces",
@@ -614,9 +615,9 @@ const VALIDATION_MESSAGES = {
   DEVICE_MODEL_LENGTH: "device_model must be between 1 and 100 characters",
   PLAYER_ID_LENGTH: "player_id must be between 1 and 100 characters",
 
-  // Emergency Contact validation 
-  EMERGENCY_CONTACT_ID_REQUIRED:"Required contact id",
-  CONTACT_ID_LENGTH:"contact_id must be between 1 and 100 characters",
+  // Emergency Contact validation
+  EMERGENCY_CONTACT_ID_REQUIRED: "Required contact id",
+  CONTACT_ID_LENGTH: "contact_id must be between 1 and 100 characters",
 
   // User suspension validation messages
   USER_ID_REQUIRED_SUSPEND: "user_id is required for suspension",

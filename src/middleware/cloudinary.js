@@ -54,9 +54,27 @@ const deleteCloudinaryImage = async (public_id) => {
   }
 };
 
+// upload Qr on cloudinary
+const uploadQrToCloudinary = (buffer, qr_id) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      {
+        folder: "uploads/qr",
+        public_id: qr_id,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    ).end(buffer);
+  });
+};
+
 module.exports = {
   upload,
   uploadpdf,
   deleteCloudinaryImage,
   profilePicParser,
+  uploadQrToCloudinary
 };

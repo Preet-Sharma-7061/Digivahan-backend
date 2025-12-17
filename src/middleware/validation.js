@@ -369,6 +369,15 @@ const commonValidations = {
       .withMessage("receiver_id must be between 1 and 100 characters");
   },
 
+   unitno: (field = "unit") => {
+    const { body } = require("express-validator");
+    return body(field)
+      .notEmpty()
+      .withMessage("unit is required")
+      .isLength({ min: 1, max: 50 })
+      .withMessage("unit must be a number between 1 and 50");
+  },
+
   // User ID validation
   orderId: (field = "order_id") => {
     const { body } = require("express-validator");

@@ -102,7 +102,7 @@ const vehicleSchema = new mongoose.Schema({
         doc_name: { type: String, required: true },
         doc_type: {
           type: String,
-          enum: ["aadhar", "polution", "insurance", "rc"],
+          enum: ["aadhar", "pollution", "insurance", "rc", "pancard","driving licence", "other"],
           required: true,
         },
         doc_number: { type: String, required: true },
@@ -112,7 +112,6 @@ const vehicleSchema = new mongoose.Schema({
     ],
   },
 });
-
 
 const garageSchema = new mongoose.Schema({
   vehicles: [vehicleSchema],
@@ -248,8 +247,7 @@ const userSchema = new mongoose.Schema({
   old_passwords: {
     previous_password1: { type: String, default: "" },
     previous_password2: { type: String, default: "" },
-    previous_password3: { type: String, default: "" },
-    previous_password4: { type: String, default: "" },
+    previous_password3: { type: String, default: "" }
   },
   live_tracking: {
     is_tracking_on: { type: Boolean, default: false },
@@ -257,6 +255,35 @@ const userSchema = new mongoose.Schema({
   notifications: [notificationSchema],
   my_orders: [userMyOrderSchema],
   address_book: [addressSchema],
+  qr_list: [
+    {
+      qr_id: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      qr_img: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      product_type: {
+        type: String,
+        enum: ["vehicle", "pets", "children", "devices"],
+        default: "vehicle",
+      },
+      vehicle_id: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      assigned_date: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
+
   chat_box: [
     {
       roomId: {

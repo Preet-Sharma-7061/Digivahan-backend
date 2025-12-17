@@ -34,6 +34,7 @@ const API_ROUTES = {
 
     // Password reset routes
     PASSWORD_RESET: {
+      CHANGE_PASSWORD :"/change-password",
       REQUEST: "/request-reset-password",
       VERIFY_OTP: "/verify-reset-otp-change-password",
     },
@@ -106,10 +107,10 @@ const API_ROUTES = {
   QR: {
     BASE: "/api",
     GENERATE_QR: "/generate-qr",
-    QR_DETAILS: "/qr/:qrId",
+    QR_DETAILS: "/qr/:qr_id",
     VALIDATE_QR: "/validate-qr",
     ASSIGN_QR: "/assign-qr",
-    QR_ASSIGNMENT: "/qr-assignment/:qrId",
+    QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
   },
 
