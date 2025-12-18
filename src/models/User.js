@@ -102,7 +102,15 @@ const vehicleSchema = new mongoose.Schema({
         doc_name: { type: String, required: true },
         doc_type: {
           type: String,
-          enum: ["aadhar", "pollution", "insurance", "rc", "pancard","driving licence", "other"],
+          enum: [
+            "aadhar",
+            "pollution",
+            "insurance",
+            "rc",
+            "pancard",
+            "driving licence",
+            "other",
+          ],
           required: true,
         },
         doc_number: { type: String, required: true },
@@ -165,7 +173,7 @@ const notificationSchema = new mongoose.Schema(
     },
 
     vehicle_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       ref: "Vehicle",
       default: null,
     },
@@ -247,7 +255,7 @@ const userSchema = new mongoose.Schema({
   old_passwords: {
     previous_password1: { type: String, default: "" },
     previous_password2: { type: String, default: "" },
-    previous_password3: { type: String, default: "" }
+    previous_password3: { type: String, default: "" },
   },
   live_tracking: {
     is_tracking_on: { type: Boolean, default: false },
