@@ -1,5 +1,5 @@
 const QRAssignment = require("../models/QRAssignment");
-const User = require('../models/User')
+const User = require("../models/User");
 const { generateQRCode } = require("../middleware/qrgernator");
 const { uploadQrToCloudinary } = require("../middleware/cloudinary");
 
@@ -106,11 +106,11 @@ const AssignedQrtoUser = async (req, res) => {
   try {
     const {
       qr_id,
-      assign_to,      // user_id
-      assigned_by,    // "user" | "sales"
-      product_type,   // optional
-      sales_id,       // optional
-      vehicle_id,     // optional
+      assign_to, // user_id
+      assigned_by, // "user" | "sales"
+      product_type, // optional
+      sales_id, // optional
+      vehicle_id, // optional
     } = req.body;
 
     // 1️⃣ Basic validation
@@ -160,9 +160,7 @@ const AssignedQrtoUser = async (req, res) => {
     }
 
     // 5️⃣ Prevent duplicate QR in user
-    const alreadyExists = user.qr_list?.some(
-      (q) => q.qr_id === qr_id
-    );
+    const alreadyExists = user.qr_list?.some((q) => q.qr_id === qr_id);
 
     if (alreadyExists) {
       return res.status(400).json({
@@ -199,5 +197,59 @@ const AssignedQrtoUser = async (req, res) => {
   }
 };
 
+// Check Qr in user QR List Apis
+const CheckQrInUser = async (req, res) => {
+  try {
+    const { user_id, vehicle_id } = req.body;
 
-module.exports = { createQrScanner, getQrDetails, AssignedQrtoUser };
+    // 🔴 validation
+    if (!user_id || !vehicle_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and vehicle_id are required",
+      });
+    }
+
+    // 🔍 find user
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 🧠 check qr_list
+    const qrExists = user.qr_list.find(
+      (qr) => qr.vehicle_id?.toString() === vehicle_id.toString()
+    );
+
+    if (qrExists) {
+      return res.status(200).json({
+        success: true,
+        message: "QR is already exist",
+        data: qrExists, // ✅ wahi QR data send
+      });
+    }
+
+    // ❌ not found
+    return res.status(200).json({
+      status: false,
+      message: "QR not found in user QR list",
+    });
+  } catch (error) {
+    console.error("Check QR in user error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+module.exports = {
+  createQrScanner,
+  getQrDetails,
+  AssignedQrtoUser,
+  CheckQrInUser,
+};

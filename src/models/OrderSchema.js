@@ -14,13 +14,14 @@ const shiprocketStatusSchema = new mongoose.Schema({
   order_id: { type: String, required: true }, // change from Number -> String
   channel_order_id: { type: String, required: true },
   shipment_id: { type: Number, default: null },
-  status: { type: String, default: "CANCELED" },
+  status: { type: String, default: "" },
   status_code: { type: Number, default: 5 },
   onboarding_completed_now: { type: Number, default: 0 },
   awb_code: { type: String, default: "" },
   courier_company_id: { type: String, default: "" },
   courier_name: { type: String, default: "" },
   new_channel: { type: Boolean, default: false },
+  delivery_code: { type: String, default: "" },
 });
 
 const orderSchema = new mongoose.Schema(
@@ -30,7 +31,7 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    order_id: { type: String, required: true },
+    payment_id: { type: String, required: true },
     order_date: { type: String, required: true },
 
     sub_total: { type: Number, required: true },

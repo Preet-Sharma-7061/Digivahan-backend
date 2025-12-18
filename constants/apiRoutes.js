@@ -106,6 +106,7 @@ const API_ROUTES = {
   // QR Code routes
   QR: {
     BASE: "/api",
+    CHECK_QR:"/check-qr",
     GENERATE_QR: "/generate-qr",
     QR_DETAILS: "/qr/:qr_id",
     VALIDATE_QR: "/validate-qr",
@@ -133,8 +134,10 @@ const API_ROUTES = {
   // Trending Cars routes
   TRENDING_CARS: {
     BASE: "/api",
-    MANAGE: "/user/trending-cars",
+    ADD_TRENDING_CAR:"/add/tranding/car",
+    GET_CAR_LIST:"/list/all-car",
     GET_BY_ID: "/user/trending-cars/:car_id",
+    DELETE_CAR_DETAILS: "/user/delete-car/:car_id",
   },
 
   // Fetch Trending routes
@@ -347,6 +350,8 @@ const API_ROUTES = {
     FETCH_BY_USER_ID: "/admin/fetch/user-id",
     CANCEL_ORDER: "/orders/cancel",
     CHECK_COURIER: "/check/courier-service",
+    // Track Order Status
+    TRACK_ORDER_STATUS:"/track-order-status"
   },
 
   // Review routes
