@@ -28,8 +28,6 @@ const CompareVehicle = async (req, res) => {
     const car1 = await TrendingCars.findById(car1_id);
     const car2 = await TrendingCars.findById(car2_id);
 
-    console.log(car1, car2);
-
     if (!car1 || !car2) {
       return res.status(404).json({
         success: false,
@@ -39,25 +37,29 @@ const CompareVehicle = async (req, res) => {
 
     // 🧠 pick only required fields
     const car1Data = {
-      car_1_id: car1_id,
+      car_id: car1_id,
       brand_name: car1.brand_name,
       model_name: car1.model_name,
-      image_url: car1.car_details.image_url,
-      price_display: car1.car_details.price_display,
+      image_url: car1.car_details?.image_url,
+      price_display: car1.car_details?.price_display,
     };
 
     const car2Data = {
-      car_2_id: car2_id,
+      car_id: car2_id,
       brand_name: car2.brand_name,
       model_name: car2.model_name,
-      image_url: car2.car_details.image_url,
-      price_display: car2.car_details.price_display,
+      image_url: car2.car_details?.image_url,
+      price_display: car2.car_details?.price_display,
     };
 
-    // 💾 save comparison
+    // 💾 save inside car_data array
     const comparison = await VehicleComparison.create({
-      car_1_data: car1Data,
-      car_2_data: car2Data,
+      car_data: [
+        {
+          car_1_data: car1Data,
+          car_2_data: car2Data,
+        },
+      ],
     });
 
     return res.status(201).json({
@@ -74,4 +76,76 @@ const CompareVehicle = async (req, res) => {
   }
 };
 
-module.exports = { CompareVehicle };
+const CompareVehicleUpdate = async (req, res) => {
+  try {
+    const { compare_id, car_id, update_car_id } = req.body;
+
+    // 🔴 validation
+    if (!compare_id || !car_id || !update_car_id) {
+      return res.status(400).json({
+        success: false,
+        message: "compare_id, car_id and update_car_id are required",
+      });
+    }
+
+    // 1️⃣ find comparison
+    const comparison = await VehicleComparison.findById(compare_id);
+
+    if (!comparison || comparison.car_data.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Comparison data not found",
+      });
+    }
+
+    // 2️⃣ find updated car
+    const updatedCar = await TrendingCars.findById(update_car_id);
+
+    if (!updatedCar) {
+      return res.status(404).json({
+        success: false,
+        message: "Updated car not found",
+      });
+    }
+
+    // 3️⃣ prepare new data
+    const updatedCarData = {
+      car_id: update_car_id,
+      brand_name: updatedCar.brand_name,
+      model_name: updatedCar.model_name,
+      image_url: updatedCar.car_details?.image_url,
+      price_display: updatedCar.car_details?.price_display,
+    };
+
+    // 4️⃣ direct update (NO LOOP needed)
+    const compareObj = comparison.car_data[0];
+
+    if (compareObj.car_1_data?.car_id?.toString() === car_id) {
+      compareObj.car_1_data = updatedCarData;
+    } else if (compareObj.car_2_data?.car_id?.toString() === car_id) {
+      compareObj.car_2_data = updatedCarData;
+    } else {
+      return res.status(404).json({
+        success: false,
+        message: "Car id not found in comparison",
+      });
+    }
+
+    // 5️⃣ save
+    await comparison.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Vehicle updated successfully",
+      data: comparison,
+    });
+  } catch (error) {
+    console.error("Compare vehicle update error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+module.exports = { CompareVehicle, CompareVehicleUpdate };
