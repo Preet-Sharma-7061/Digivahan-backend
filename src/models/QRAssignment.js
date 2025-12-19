@@ -5,31 +5,43 @@ const qrAssignmentSchema = new mongoose.Schema(
     qr_id: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
-    vehicle_id: {
+    qr_img: {
       type: String,
-      required: true,
+      default: null,
+    },
+    qr_status: {
+      type: String,
+      default: "unassigned",
+      enum: ["unassigned", "assigned", "blocked"],
       trim: true,
     },
     assigned_by: {
       type: String,
-      required: true,
+      // required: true,
       enum: ["user", "sales"],
     },
-    user_id: {
+    assign_to: {
       type: String,
-      required: function() {
-        return this.assigned_by === "user";
-      },
+      default: "",
       trim: true,
+    },
+    product_type: {
+      type: String,
+      default: "vehicle",
+      enum: ["vehicle", "pets", "children", "devices"],
+      trim: true,
+    },
+    vehicle_id: {
+      type: String,
+      // required: true,
+      trim: true,
+      default: "",
     },
     sales_id: {
       type: String,
-      required: function() {
-        return this.assigned_by === "sales";
-      },
+      default: "",
       trim: true,
     },
     status: {
@@ -39,16 +51,8 @@ const qrAssignmentSchema = new mongoose.Schema(
     },
     assigned_at: {
       type: Date,
-      default: Date.now,
-    },
-    vehicle_details: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null,
-    },
-    qr_details: {
-      type: mongoose.Schema.Types.Mixed,
-      default: null,
-    },
+      default: "",
+    }
   },
   {
     timestamps: true,

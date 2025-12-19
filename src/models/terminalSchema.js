@@ -16,7 +16,7 @@ const feedBackSchema = new mongoose.Schema(
     product_type: {
       type: String,
       required: true,
-      enum: ["app", "vehicle", "service", "other"], // modify as per your need
+      enum: ["app", "vehicle", "service", "other", "qr"], // modify as per your need
     },
 
     rating: {
@@ -44,6 +44,5 @@ const feedBackSchema = new mongoose.Schema(
 );
 
 feedBackSchema.index({ product_type: 1, createdAt: -1 });
-
 
 module.exports = mongoose.model("Feedback", feedBackSchema);

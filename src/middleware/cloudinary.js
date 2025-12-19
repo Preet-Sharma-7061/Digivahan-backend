@@ -23,19 +23,19 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 // Cloudinary Storage (PDF Only)
-const pdfStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "vehicle_docs/pdf", // ← specific folder for PDF
-    resource_type: "raw", // ← required for PDF
-    allowed_formats: ["pdf"], // ← allow only pdf
-  },
-});
+// const pdfStorage = new CloudinaryStorage({
+//   cloudinary,
+//   params: {
+//     folder: "vehicle_docs/pdf", // ← specific folder for PDF
+//     resource_type: "raw", // ← required for PDF
+//     allowed_formats: ["pdf"], // ← allow only pdf
+//   },
+// });
 
-// Correct Multer PDF upload middleware
-const uploadpdf = multer({
-  storage: pdfStorage,
-});
+// // Correct Multer PDF upload middleware
+// const uploadpdf = multer({ storage: pdfStorage });
+
+
 
 // Memory storage – keeps file in buffer
 const multerstorage = multer.memoryStorage();
@@ -54,9 +54,28 @@ const deleteCloudinaryImage = async (public_id) => {
   }
 };
 
+// upload Qr on cloudinary
+const uploadQrToCloudinary = (buffer, qr_id) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream(
+        {
+          folder: "qruloadfile",
+          public_id: qr_id,
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      )
+      .end(buffer);
+  });
+};
+
 module.exports = {
   upload,
-  uploadpdf,
   deleteCloudinaryImage,
   profilePicParser,
+  uploadQrToCloudinary,
 };

@@ -14,6 +14,8 @@ const {
   checkCouierService,
   findOrderByOrderId,
   findOrderByUserId,
+  TrackOrderwithOrderId,
+  OrderCancel
 } = require("../controllers/OrderController.js");
 
 router.post(
@@ -55,8 +57,23 @@ router.post(
 
 router.post(
   API_ROUTES.ORDER.FETCH_BY_USER_ID,
-  [commonValidations.userId("user_id"), , handleValidationErrors],
+  [commonValidations.userId("user_id"), handleValidationErrors],
   findOrderByUserId
+);
+
+router.post(
+  API_ROUTES.ORDER.CANCEL_ORDER,
+  [
+    commonValidations.userId("user_id"),
+    handleValidationErrors
+  ], 
+  OrderCancel
+)
+
+router.post(
+  API_ROUTES.ORDER.TRACK_ORDER_STATUS,
+  [commonValidations.userId("user_id"), handleValidationErrors],
+  TrackOrderwithOrderId
 );
 
 module.exports = router;

@@ -1,0 +1,42 @@
+const express = require("express");
+const router = express.Router();
+
+const {
+  handleValidationErrors,
+  commonValidations,
+} = require("../middleware/validation.js");
+
+const { API_ROUTES } = require("../../constants/apiRoutes.js");
+
+const {
+  createQrScanner,
+  getQrDetails,
+  AssignedQrtoUser,
+  CheckQrInUser
+} = require("../controllers/QrController.js");
+
+router.post(
+  API_ROUTES.QR.GENERATE_QR,
+  [commonValidations.unitno("unit"), handleValidationErrors],
+  createQrScanner
+);
+
+router.get(API_ROUTES.QR.QR_DETAILS, [handleValidationErrors], getQrDetails);
+
+router.post(
+  API_ROUTES.QR.QR_ASSIGNMENT,
+  [handleValidationErrors],
+  AssignedQrtoUser
+);
+
+router.post(
+  API_ROUTES.QR.CHECK_QR,
+  [
+    commonValidations.userId("user_id"),
+    commonValidations.vehicleIdForDocument("vehicle_id"),
+    handleValidationErrors
+  ],
+  CheckQrInUser
+)
+
+module.exports = router;

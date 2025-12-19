@@ -37,6 +37,11 @@ const userReviewroutes = require("./src/routes/addReview.routes.js");
 const userOrderRoutes = require("./src/routes/order.routes.js");
 const roomRoutes = require("./src/routes/rooom.routes.js");
 const notificationRoutes = require("./src/routes/notification.routes.js");
+const QRroutes = require("./src/routes/qr.routes.js")
+
+// Dashboard Routes
+const trendingCarsRoutes = require("./src/routes/trendingCars.route.js")
+const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js")
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -91,6 +96,9 @@ app.use(API_ROUTES.REVIEW.BASE, userReviewroutes);
 app.use(API_ROUTES.ORDER.BASE, userOrderRoutes);
 app.use(API_ROUTES.CHAT.BASE, roomRoutes);
 app.use(API_ROUTES.NOTIFICATION.BASE, notificationRoutes);
+app.use(API_ROUTES.QR.BASE, QRroutes)
+app.use(API_ROUTES.TRENDING_CARS.BASE, trendingCarsRoutes)
+app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes)
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file

@@ -4,24 +4,6 @@ const User = require("../models/User");
 const Order = require("../models/OrderSchema");
 
 // ------------------------------
-// Shiprocket Order API Function
-// ------------------------------
-const createShiprocketOrder = async (payload) => {
-  try {
-    const response = await axios.post(process.env.SHIP_ROCKET_URL, payload, {
-      headers: {
-        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-    return response.data;
-  } catch (error) {
-    console.log("Shiprocket API Error:", error?.response?.data);
-    return null;
-  }
-};
-
-// ------------------------------
 // Format Order Date (YYYY-MM-DD HH:mm)
 // ------------------------------
 const formatOrderDate = () => {
@@ -41,7 +23,7 @@ const GenerateOrder = async (req, res) => {
   try {
     const {
       user_id,
-      channel_order_id,
+      payment_id,
       sub_total,
       order_value,
       declared_value,
@@ -89,8 +71,7 @@ const GenerateOrder = async (req, res) => {
       height = 10,
     } = req.body;
 
-    const body = req.body;
-    console.log(body);
+    console.log(user_id);
 
     // -----------------------------
     // Find User
@@ -109,7 +90,7 @@ const GenerateOrder = async (req, res) => {
     // Prepare orderData for Shiprocket
     // -----------------------------
     const orderDataForShiprocket = {
-      order_id: channel_order_id,
+      order_id: payment_id,
       order_date: currentOrderDate,
 
       sub_total,
@@ -185,13 +166,17 @@ const GenerateOrder = async (req, res) => {
     // Save order in MongoDB
     // ------------------------------
     const newOrder = await Order.create({
-      user_id, // 👈 add this
+      user_id,
       ...orderDataForShiprocket,
+      payment_id: orderDataForShiprocket.order_id,
       ship_rocket: shiprocketResponse,
     });
 
+    const { order_id, ...restOrderData } = orderDataForShiprocket;
+
     const myorder = {
-      ...orderDataForShiprocket,
+      ...restOrderData, // ❌ order_id gone
+      payment_id: order_id, // ✅ renamed
       ship_rocket: shiprocketResponse,
     };
 
@@ -222,6 +207,28 @@ const GenerateOrder = async (req, res) => {
     });
   }
 };
+
+// ------------------------------
+// Shiprocket Order API Function
+// ------------------------------
+const createShiprocketOrder = async (payload) => {
+  try {
+    const response = await axios.post(`https://apiv2.shiprocket.in/v1/external/orders/create/adhoc`, payload, {
+      headers: {
+        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.log("Shiprocket API Error:", error?.response?.data);
+    return null;
+  }
+};
+
+// ------------------------------
+// Get All Order From user My-order node
+// ------------------------------
 
 const getUserAllOrder = async (req, res) => {
   try {
@@ -269,6 +276,10 @@ const getUserAllOrder = async (req, res) => {
   }
 };
 
+
+// ------------------------------
+// Find Single Order Details
+// --
 const findSingleOrderData = async (req, res) => {
   try {
     const { user_id, order_id } = req.body;
@@ -310,6 +321,9 @@ const findSingleOrderData = async (req, res) => {
   }
 };
 
+// ------------------------------
+// Filter Courier Service Company on the basis of Price & Date
+// --
 const checkCouierService = async (req, res) => {
   try {
     const { delivery_postcode, compareOn } = req.body;
@@ -390,6 +404,9 @@ const checkCouierService = async (req, res) => {
   }
 };
 
+// ------------------------------
+// Get Order Details By Admin
+// --
 const findOrderByOrderId = async (req, res) => {
   try {
     const { order_id } = req.body;
@@ -427,6 +444,10 @@ const findOrderByOrderId = async (req, res) => {
     });
   }
 };
+
+// ------------------------------
+// Get All Order by userId Order node
+// --
 
 const findOrderByUserId = async (req, res) => {
   try {
@@ -474,6 +495,245 @@ const findOrderByUserId = async (req, res) => {
   }
 };
 
+
+// ------------------------------
+// Order Cancel By user
+// --
+const OrderCancel = async (req, res) => {
+  try {
+    const { user_id, order_id, shiprocket_orderId } = req.body;
+
+    if (!user_id || !order_id || !shiprocket_orderId) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id, order_id and shiprocket_orderId are required",
+      });
+    }
+
+    // 1️⃣ Find order by order_id (FAST)
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    // 2️⃣ Verify order belongs to user
+    if (String(order.user_id) !== String(user_id)) {
+      return res.status(403).json({
+        status: false,
+        message: "This order does not belong to this user",
+      });
+    }
+
+    // 3️⃣ Verify Shiprocket Order ID
+    if (String(order.ship_rocket?.order_id) !== String(shiprocket_orderId)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid Shiprocket order id",
+      });
+    }
+
+    // 4️⃣ Call Shiprocket Cancel API
+    const cancelResponse = await cancelShiprocketOrder(shiprocket_orderId);
+
+    if (!cancelResponse?.status_code) {
+      return res.status(400).json({
+        status: false,
+        message: "Shiprocket order cancellation failed",
+        shiprocket_response: cancelResponse,
+      });
+    }
+
+    // 5️⃣ Update ORDER schema
+    order.ship_rocket.status = "CANCELLED";
+    order.ship_rocket.delivery_code = "";
+
+    await order.save();
+
+    // 6️⃣ Update USER schema (my_orders array)
+    await User.updateOne(
+      {
+        _id: user_id,
+        "my_orders.order_id": order._id,
+      },
+      {
+        $set: {
+          "my_orders.$.order_data.ship_rocket.status": "CANCELLED",
+          "my_orders.$.order_data.ship_rocket.delivery_code": "",
+        },
+      }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Order cancelled successfully",
+      order_id,
+      shiprocket_orderId,
+      shiprocket_response: cancelResponse,
+    });
+  } catch (error) {
+    console.error(
+      "Order cancel error:",
+      error?.response?.data || error.message
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to cancel order",
+    });
+  }
+};
+
+// Ship Rocket cancel order apis
+const cancelShiprocketOrder = async (orderId) => {
+  try {
+    const response = await axios.post(
+      "https://apiv2.shiprocket.in/v1/external/orders/cancel",
+      {
+        ids: [orderId],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Shiprocket cancel order error:",
+      error?.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+
+// Track Order Status
+const TrackOrderwithOrderId = async (req, res) => {
+  try {
+    const { user_id, order_id, shiprocket_orderId } = req.body;
+
+    if (!user_id || !order_id || !shiprocket_orderId) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id, order_id and shiprocket_orderId are required",
+      });
+    }
+
+    /* ----------------------------------
+       1️⃣ Find order by order_id (FAST)
+    -----------------------------------*/
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    /* ----------------------------------
+       2️⃣ Check order belongs to user
+    -----------------------------------*/
+    if (String(order.user_id) !== String(user_id)) {
+      return res.status(403).json({
+        status: false,
+        message: "This order does not belong to this user",
+      });
+    }
+
+    /* ----------------------------------
+       3️⃣ Validate Shiprocket order ID
+    -----------------------------------*/
+    if (String(order.ship_rocket?.order_id) !== String(shiprocket_orderId)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid Shiprocket order id",
+      });
+    }
+
+    /* ----------------------------------
+       4️⃣ Call Shiprocket Tracking API
+    -----------------------------------*/
+    const trackingData = await trackShiprocketOrder(shiprocket_orderId);
+
+    /* ----------------------------------
+       5️⃣ Extract shipment status & delivery_code
+       (shipment status preferred)
+    -----------------------------------*/
+    const shipmentStatus =
+      trackingData?.data?.shipments?.status ||
+      trackingData?.data?.status ||
+      "UNKNOWN";
+
+    const deliveryCode = trackingData?.data?.delivery_code || "";
+
+    /* ----------------------------------
+       6️⃣ Update ORDER schema
+    -----------------------------------*/
+    order.ship_rocket.status = shipmentStatus;
+    order.ship_rocket.delivery_code = deliveryCode;
+
+    await order.save();
+
+    /* ----------------------------------
+       7️⃣ Update USER schema (my_orders)
+    -----------------------------------*/
+    await User.findOneAndUpdate(
+      {
+        _id: user_id,
+        "my_orders.order_id": new mongoose.Types.ObjectId(order_id),
+      },
+      {
+        $set: {
+          "my_orders.$.order_data.ship_rocket.status": shipmentStatus,
+          "my_orders.$.order_data.ship_rocket.delivery_code": deliveryCode,
+        },
+      }
+    );
+
+    /* ----------------------------------
+       8️⃣ Response
+    -----------------------------------*/
+    return res.status(200).json({
+      status: true,
+      message: "Order tracked & updated successfully",
+      order_id,
+      shiprocket_orderId,
+      shipment_status: shipmentStatus,
+      delivery_code: deliveryCode,
+      tracking: trackingData,
+    });
+  } catch (error) {
+    console.error("Track order error:", error?.response?.data || error.message);
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to track order",
+    });
+  }
+};
+
+
+const trackShiprocketOrder = async (shiprocketOrderId) => {
+  const url = `https://apiv2.shiprocket.in/v1/external/orders/show/${shiprocketOrderId}`;
+
+  const response = await axios.get(url, {
+    headers: {
+      Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  return response.data;
+};
+
 module.exports = {
   GenerateOrder,
   getUserAllOrder,
@@ -481,4 +741,6 @@ module.exports = {
   checkCouierService,
   findOrderByOrderId,
   findOrderByUserId,
+  OrderCancel,
+  TrackOrderwithOrderId,
 };

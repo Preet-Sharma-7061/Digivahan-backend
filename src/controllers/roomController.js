@@ -55,6 +55,7 @@ const createRoom = async (req, res) => {
         await pushRoomToUserChatbox(targetUserId, existingRoom);
 
         return res.status(200).json({
+          status: true,
           message: "Direct chat already exists",
           room: existingRoom,
         });
@@ -92,6 +93,7 @@ const createRoom = async (req, res) => {
       await pushRoomToUserChatbox(targetUserId, newRoom);
 
       return res.status(201).json({
+        status: true,
         message: "Direct chat created successfully",
         room: newRoom,
       });
@@ -142,10 +144,9 @@ const createRoom = async (req, res) => {
     }
   } catch (err) {
     console.error("Error creating room:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ status: false, message: err.message });
   }
 };
-
 
 // =========================================================
 // 🔥 Helper Function: Push Room to User.chat_box

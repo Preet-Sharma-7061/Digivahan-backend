@@ -34,6 +34,7 @@ const API_ROUTES = {
 
     // Password reset routes
     PASSWORD_RESET: {
+      CHANGE_PASSWORD: "/change-password",
       REQUEST: "/request-reset-password",
       VERIFY_OTP: "/verify-reset-otp-change-password",
     },
@@ -105,11 +106,12 @@ const API_ROUTES = {
   // QR Code routes
   QR: {
     BASE: "/api",
+    CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
-    QR_DETAILS: "/qr/:qrId",
+    QR_DETAILS: "/qr/:qr_id",
     VALIDATE_QR: "/validate-qr",
     ASSIGN_QR: "/assign-qr",
-    QR_ASSIGNMENT: "/qr-assignment/:qrId",
+    QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
   },
 
@@ -132,8 +134,10 @@ const API_ROUTES = {
   // Trending Cars routes
   TRENDING_CARS: {
     BASE: "/api",
-    MANAGE: "/user/trending-cars",
+    ADD_TRENDING_CAR: "/add/tranding/car",
+    GET_CAR_LIST: "/list/all-car",
     GET_BY_ID: "/user/trending-cars/:car_id",
+    DELETE_CAR_DETAILS: "/user/delete-car/:car_id",
   },
 
   // Fetch Trending routes
@@ -292,6 +296,7 @@ const API_ROUTES = {
     BASE: "/api/notifications",
     SEND: "/send",
     GET_USER_NOTIFICATIONS: "/:user_id",
+    SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
     VERIFY_SECURITY_CODE: "/verify/security-code",
     UNREAD_COUNT: "/:user_id/unread-count",
@@ -346,6 +351,8 @@ const API_ROUTES = {
     FETCH_BY_USER_ID: "/admin/fetch/user-id",
     CANCEL_ORDER: "/orders/cancel",
     CHECK_COURIER: "/check/courier-service",
+    // Track Order Status
+    TRACK_ORDER_STATUS: "/track-order-status",
   },
 
   // Review routes
