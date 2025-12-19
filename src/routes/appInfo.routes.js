@@ -9,7 +9,8 @@ const {
   getAndroidVersion,
   getIOSVersion,
   getPrivacyPolicy,
-  getTermsCondition
+  getTermsCondition,
+  updateRazorpayKey
 } = require("../controllers/appInfo.controller");
 
 // GET ANDROID VERSION
@@ -35,6 +36,8 @@ router.post("/api/v1/app-info/privacy-policy", updatePrivacyPolicy);
 
 // TERMS & CONDITIONS UPDATE
 router.post("/api/v1/app-info/terms-condition", updateTermsCondition);
+// 🔑 RAZORPAY KEY ADD / UPDATE
+router.post("/api/v1/app-info/razorpay-key", updateRazorpayKey);
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", async (req, res) => {

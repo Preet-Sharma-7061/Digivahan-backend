@@ -10,8 +10,13 @@ const appInfoRoutes = require("./src/routes/appInfo.routes");
 const fuelRoutes = require('./src/routes/fuel.routes');
 const uploadRoutes = require('./src/routes/upload.routes');
 const deleteImageRoutes = require('./src/routes/deleteImage.routes');
+const razorpayRoutes = require("./src/routes/razorpay.routes");
+const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes");
+const newsRoutes = require("./src/routes/news.routes");
+const tipsTricksRoutes = require("./src/routes/tipsTricks.routes");
 
-// Hasan Code End Her
+// Hasan Code End Here
+
 // Database and utils
 const connectDB = require("./db_config/index.js");
 const startDeletionCron = require("./src/utils/cronJobs.js");
@@ -20,6 +25,7 @@ const startDeletionCron = require("./src/utils/cronJobs.js");
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
+
 const authRoutes = require("./src/routes/auth.routes.js");
 const profileDeletation = require("./src/routes/profileDeletation.routes.js");
 const profileUpdateRoutes = require("./src/routes/profileUpdate.routes.js");
@@ -40,6 +46,7 @@ const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js")
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
 
+
 const app = express();
 
 // -------------------- MIDDLEWARES --------------------
@@ -47,9 +54,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Optional request logger
-// const { requestLogger } = require("./src/middleware/logger.js");
-// app.use(requestLogger);
+
 
 // Database connection middleware
 app.use(async (req, res, next) => {
@@ -72,9 +77,14 @@ app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
 app.use(deleteImageRoutes);
-
+app.use(razorpayRoutes);
+app.use(qrBenefitsRoutes);
+app.use(newsRoutes);
+app.use(tipsTricksRoutes);
 // Hasan Code End Here
-// -------------------- ROUTES -------------------
+
+// -------------------- ROUTES --------------------
+
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
