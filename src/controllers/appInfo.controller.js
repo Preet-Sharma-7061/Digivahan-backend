@@ -70,7 +70,7 @@ exports.updateIOSVersion = async (req, res) => {
 };
 
   // GET IOS VERSION
-  exports.getIOSVersion = async (req, res) => {
+exports.getIOSVersion = async (req, res) => {
     try {
       const doc = await getMainDoc();
       if (!doc || !doc.app_version?.ios) {
@@ -116,7 +116,7 @@ exports.updatePrivacyPolicy = async (req, res) => {
   };
 
 // UPDATE TERMS & CONDITIONS
-exports.updateTermsCondition = async (req, res) => {
+ exports.updateTermsCondition = async (req, res) => {
   try {
     const { terms_condition } = req.body;
 
@@ -148,3 +148,45 @@ exports.updateTermsCondition = async (req, res) => {
       return res.status(500).json({ success: false, message: "Server Error" });
     }
   };
+
+  
+
+// 🔑 ADD / UPDATE RAZORPAY KEY
+ exports.updateRazorpayKey = async (req, res) => {
+  try {
+    const { razorpay_key_id } = req.body;
+
+    if (!razorpay_key_id) {
+      return res.status(400).json({
+        success: false,
+        message: "razorpay_key_id is required",
+      });
+    }
+
+    const updated = await AppInfo.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          "api_key.razorpay_key_id": razorpay_key_id,
+        },
+      },
+      {
+        new: true,
+        upsert: true, // ⭐ agar document nahi hai to create karega
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Razorpay key updated successfully",
+      data: updated.api_key,
+    });
+  } catch (error) {
+    console.error("Razorpay Key Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update Razorpay key",
+    });
+  }
+};
+

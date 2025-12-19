@@ -4,16 +4,19 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 
-<<<<<<< HEAD
 // Import routes
 // Hasan Code
 const appInfoRoutes = require("./src/routes/appInfo.routes");
 const fuelRoutes = require('./src/routes/fuel.routes');
 const uploadRoutes = require('./src/routes/upload.routes');
 const deleteImageRoutes = require('./src/routes/deleteImage.routes');
+const razorpayRoutes = require("./src/routes/razorpay.routes");
+const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes");
+const newsRoutes = require("./src/routes/news.routes");
+const tipsTricksRoutes = require("./src/routes/tipsTricks.routes");
 
 // Hasan Code End Here
-=======
+
 // Database and utils
 const connectDB = require("./db_config/index.js");
 const startDeletionCron = require("./src/utils/cronJobs.js");
@@ -22,7 +25,7 @@ const startDeletionCron = require("./src/utils/cronJobs.js");
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
->>>>>>> f801296a26a9212ba7efc618e0461b2451ab7547
+
 const authRoutes = require("./src/routes/auth.routes.js");
 const profileDeletation = require("./src/routes/profileDeletation.routes.js");
 const profileUpdateRoutes = require("./src/routes/profileUpdate.routes.js");
@@ -38,6 +41,7 @@ const notificationRoutes = require("./src/routes/notification.routes.js");
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
 
+
 const app = express();
 
 // -------------------- MIDDLEWARES --------------------
@@ -45,12 +49,9 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Optional request logger
-// const { requestLogger } = require("./src/middleware/logger.js");
-// app.use(requestLogger);
 
-<<<<<<< HEAD
-// Database connection middleware jdhfhf
+
+// Database connection middleware 
 app.use(async (req, res, next) => {
   try {
     // Only connect if not already connected
@@ -71,11 +72,14 @@ app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
 app.use(deleteImageRoutes);
-
+app.use(razorpayRoutes);
+app.use(qrBenefitsRoutes);
+app.use(newsRoutes);
+app.use(tipsTricksRoutes);
 // Hasan Code End Here
-=======
+
 // -------------------- ROUTES --------------------
->>>>>>> f801296a26a9212ba7efc618e0461b2451ab7547
+
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);

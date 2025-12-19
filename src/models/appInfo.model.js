@@ -36,7 +36,14 @@ const AppInfoSchema = new mongoose.Schema(
     policy: {
       privacy_policy: { type: PolicySchema, default: null },
       terms_condition: { type: TermsSchema, default: null }
-    }
+    },
+     // ✅ NEW FIELD
+     api_key: {
+      razorpay_key_id: {
+        type: String,
+        trim: true,
+      },
+    },
   },
   { timestamps: true }
 );
