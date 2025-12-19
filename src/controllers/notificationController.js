@@ -87,8 +87,14 @@ const sendNotification = async (req, res) => {
 const getAllNotification = async (req, res) => {
   try {
     const { user_id } = req.params;
+    let { current_page } = req.query;
 
-    // 🔍 basic validation
+    // 🧠 default page = 1
+    current_page = parseInt(current_page) || 1;
+
+    const PAGE_SIZE = 20;
+    const skip = (current_page - 1) * PAGE_SIZE;
+
     if (!user_id) {
       return res.status(400).json({
         status: false,
@@ -96,7 +102,7 @@ const getAllNotification = async (req, res) => {
       });
     }
 
-    // 👤 find user & only fetch notifications
+    // 👤 only notifications fetch karo
     const user = await User.findById(user_id).select("notifications");
 
     if (!user) {
@@ -106,13 +112,94 @@ const getAllNotification = async (req, res) => {
       });
     }
 
+    const notifications = user.notifications || [];
+
+    // 🔔 unseen notifications count
+    const unseenCount = notifications.filter(
+      (n) => n.default_status === false
+    ).length;
+
+    // ⏰ latest notifications on top
+    const sortedNotifications = notifications.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    // 📄 pagination logic
+    const totalNotifications = sortedNotifications.length;
+    const totalPages = Math.ceil(totalNotifications / PAGE_SIZE);
+
+    // ✅ ONLY current page ka data
+    const pageData = sortedNotifications.slice(
+      skip,
+      skip + PAGE_SIZE
+    );
+
     return res.status(200).json({
       status: true,
       message: "Notifications fetched successfully",
-      data: user.notifications || [],
+      unseen_count: unseenCount,
+      pagination: {
+        current_page,
+        page_size: PAGE_SIZE,
+        total_pages: totalPages,
+        total_notifications: totalNotifications,
+      },
+      data: pageData,
     });
   } catch (error) {
     console.error("Get notifications error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+const seenNotificationByUser = async (req, res) => {
+  try {
+    const { user_id, notification_id } = req.body;
+
+    // 🔍 validation
+    if (!notification_id) {
+      return res.status(400).json({
+        status: false,
+        message: "notification_id are required",
+      });
+    }
+
+    // 👤 find user
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    // 🔔 find notification inside user's notifications array
+    const notification = user.notifications.id(notification_id);
+
+    if (!notification) {
+      return res.status(404).json({
+        status: false,
+        message: "Notification not found",
+      });
+    }
+
+    // ✅ mark as seen
+    notification.default_status = true;
+
+    // 💾 save user document
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Notification marked as seen",
+    });
+  } catch (error) {
+    console.error("Seen notification error:", error);
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -263,4 +350,5 @@ module.exports = {
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
+  seenNotificationByUser
 };

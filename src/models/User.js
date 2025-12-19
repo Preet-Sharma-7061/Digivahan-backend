@@ -220,6 +220,11 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    default_status: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true, // createdAt & updatedAt
@@ -233,7 +238,7 @@ const userSchema = new mongoose.Schema({
     last_name: { type: String, trim: true },
     phone_number: { type: String, trim: true, unique: true },
     phone_number_verified: { type: Boolean, default: false },
-    is_phone_number_primary: { type: Boolean, default: true },
+    is_phone_number_primary: { type: Boolean, default: false },
     email: { type: String, trim: true, unique: true, lowercase: true },
     is_email_verified: { type: Boolean, default: false },
     is_email_primary: { type: Boolean, default: false },
