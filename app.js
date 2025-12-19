@@ -51,7 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // const { requestLogger } = require("./src/middleware/logger.js");
 // app.use(requestLogger);
 
-// Database connection middleware jdhfhf
+// Database connection middleware
 app.use(async (req, res, next) => {
   try {
     // Only connect if not already connected

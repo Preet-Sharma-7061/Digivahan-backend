@@ -37,7 +37,6 @@ router.post(
     commonValidations.phone("phone"),
     commonValidations.password("password", 8),
     commonValidations.otpChannel("otp_channel"),
-    commonValidations.hitTypeRegisterUser("hit_type"),
     handleValidationErrors,
   ],
   registerInit

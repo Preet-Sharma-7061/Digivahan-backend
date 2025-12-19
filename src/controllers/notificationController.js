@@ -47,6 +47,14 @@ const sendNotification = async (req, res) => {
       });
     }
 
+    let incidentProofArray = [];
+
+    if (Array.isArray(incident_proof)) {
+      incidentProofArray = incident_proof;
+    } else if (incident_proof) {
+      incidentProofArray = [incident_proof];
+    }
+
     // 3️⃣ Push notification into receiver.notifications
     receiver.notifications.push({
       sender_id,
@@ -62,7 +70,7 @@ const sendNotification = async (req, res) => {
       chat_room_id,
       latitude,
       longitude,
-      incident_proof,
+      incident_proof: incidentProofArray,
       inapp_notification,
     });
 
@@ -129,10 +137,7 @@ const getAllNotification = async (req, res) => {
     const totalPages = Math.ceil(totalNotifications / PAGE_SIZE);
 
     // ✅ ONLY current page ka data
-    const pageData = sortedNotifications.slice(
-      skip,
-      skip + PAGE_SIZE
-    );
+    const pageData = sortedNotifications.slice(skip, skip + PAGE_SIZE);
 
     return res.status(200).json({
       status: true,
@@ -344,11 +349,10 @@ const verifySecurityCode = async (req, res) => {
   }
 };
 
-
 module.exports = {
   sendNotification,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
-  seenNotificationByUser
+  seenNotificationByUser,
 };

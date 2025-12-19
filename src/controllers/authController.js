@@ -11,7 +11,6 @@ const {
   generateTempUserId,
   generateVerificationId,
   sendOTP,
-  formatContactForDisplay,
 } = require("../utils/otpUtils");
 
 const { ERROR_MESSAGES, SUCCESS_MESSAGES } = require("../../constants");
@@ -28,8 +27,7 @@ const registerInit = async (req, res) => {
       email,
       phone,
       password,
-      otp_channel,
-      hit_type,
+      otp_channel
     } = req.body;
 
     // Check if user already exists in permanent users table
@@ -40,100 +38,90 @@ const registerInit = async (req, res) => {
       ],
     });
 
-    // If hit_type is "register", proceed with registration
-    if (hit_type === "register") {
-      // Check if user already exists
-      if (existingUser) {
-        if (existingUser.basic_details.email === email) {
-          return res.status(400).json({
-            status: false,
-            error_type: "email",
-            message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
-          });
-        } else if (existingUser.basic_details.phone_number === phone) {
-          return res.status(400).json({
-            status: false,
-            error_type: "phone",
-            message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
-          });
-        }
-      }
-
-      // Check if contact has reached daily OTP limit
-      const contact = otp_channel === "PHONE" ? phone : email;
-      const hasReachedLimit = await OTP.hasReachedDailyLimit(contact);
-
-      if (hasReachedLimit) {
-        return res.status(429).json({
+    // Check if user already exists
+    if (existingUser) {
+      if (existingUser.basic_details.email === email) {
+        return res.status(400).json({
           status: false,
-          error_type: "other",
-          message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
+          error_type: "email",
+          message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
+        });
+      } else if (existingUser.basic_details.phone_number === phone) {
+        return res.status(400).json({
+          status: false,
+          error_type: "phone",
+          message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
         });
       }
+    }
 
-      // Generate OTP and user register ID
-      const otpCode = generateOTP(6);
-      const userRegisterId = generateTempUserId();
+    // Check if contact has reached daily OTP limit
+    const contact = otp_channel === "PHONE" ? phone : email;
+    const hasReachedLimit = await OTP.hasReachedDailyLimit(contact);
 
-      // Create or update OTP record
-      await OTP.createOrUpdateOtp(contact, otpCode, otp_channel);
-
-      // Check if temp user already exists and delete it
-      await TempUser.findOneAndDelete({
-        $or: [{ email }, { phone }],
-      });
-
-      // Create temp user record
-      const tempUser = new TempUser({
-        user_register_id: userRegisterId,
-        first_name,
-        last_name,
-        email,
-        phone,
-        password, // Will be hashed when saved
-        otp_channel,
-        otp_code: otpCode,
-        otp_expires_at: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-      });
-
-      await tempUser.save();
-
-      // Send OTP via selected channel
-      const otpSent = await sendOTP(contact, otpCode, otp_channel, "signup");
-
-      if (!otpSent) {
-        // If OTP sending fails, clean up temp user
-        await TempUser.findByIdAndDelete(tempUser._id);
-        return res.status(500).json({
-          status: false,
-          error_type: "other",
-          message: ERROR_MESSAGES.OTP_SEND_FAILED,
-        });
-      }
-
-      // Get today's attempt count
-      const otpRecord = await OTP.getTodayAttempts(contact);
-      const attemptsToday = otpRecord ? otpRecord.attempts_today : 1;
-
-      // Calculate expiry time (10 minutes from now)
-      const validUntil = new Date(Date.now() + 10 * 60 * 1000);
-
-      res.status(200).json({
-        status: true,
-        message: `OTP sent via ${otp_channel.toLowerCase()}.`,
-        valid_until: validUntil.toISOString(),
-        attempts_today: attemptsToday,
-        otp_verify_endpoint: "auth/register/verify-otp",
-        user_register_id: userRegisterId,
-      });
-    } else {
-      // Invalid hit_type
-      return res.status(400).json({
+    if (hasReachedLimit) {
+      return res.status(429).json({
         status: false,
         error_type: "other",
-        message: ERROR_MESSAGES.INVALID_PARAMETER,
+        message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
       });
     }
+
+    // Generate OTP and user register ID
+    const otpCode = generateOTP(6);
+    const userRegisterId = generateTempUserId();
+
+    // Create or update OTP record
+    await OTP.createOrUpdateOtp(contact, otpCode, otp_channel);
+
+    // Check if temp user already exists and delete it
+    await TempUser.findOneAndDelete({
+      $or: [{ email }, { phone }],
+    });
+
+    // Create temp user record
+    const tempUser = new TempUser({
+      user_register_id: userRegisterId,
+      first_name,
+      last_name,
+      email,
+      phone,
+      password, // Will be hashed when saved
+      otp_channel,
+      otp_code: otpCode,
+      otp_expires_at: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+    });
+
+    await tempUser.save();
+
+    // Send OTP via selected channel
+    const otpSent = await sendOTP(contact, otpCode, otp_channel, "signup");
+
+    if (!otpSent) {
+      // If OTP sending fails, clean up temp user
+      await TempUser.findByIdAndDelete(tempUser._id);
+      return res.status(500).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.OTP_SEND_FAILED,
+      });
+    }
+
+    // Get today's attempt count
+    const otpRecord = await OTP.getTodayAttempts(contact);
+    const attemptsToday = otpRecord ? otpRecord.attempts_today : 1;
+
+    // Calculate expiry time (10 minutes from now)
+    const validUntil = new Date(Date.now() + 10 * 60 * 1000);
+
+    res.status(200).json({
+      status: true,
+      message: `OTP sent via ${otp_channel.toLowerCase()}.`,
+      valid_until: validUntil.toISOString(),
+      attempts_today: attemptsToday,
+      otp_verify_endpoint: "auth/register/verify-otp",
+      user_register_id: userRegisterId,
+    });
   } catch (error) {
     console.error("Register init error:", error);
     res.status(500).json({
@@ -241,8 +229,6 @@ const verifyOtp = async (req, res) => {
         password: tempUser.password,
         phone_number_verified: tempUser.otp_channel === "PHONE",
         is_phone_number_primary: tempUser.otp_channel === "PHONE",
-        is_email_verified: tempUser.otp_channel === "EMAIL",
-        is_email_primary: tempUser.otp_channel === "EMAIL",
         profile_completion_percent: 20,
       },
       public_details: {
@@ -660,8 +646,7 @@ const ChangeUserpassword = async (req, res) => {
     user.old_passwords.previous_password2 =
       user.old_passwords.previous_password1;
 
-    user.old_passwords.previous_password1 =
-      user.basic_details.password; // current hashed password
+    user.old_passwords.previous_password1 = user.basic_details.password; // current hashed password
 
     // 7️⃣ Update password
     user.basic_details.password = new_password;
@@ -673,7 +658,6 @@ const ChangeUserpassword = async (req, res) => {
       status: true,
       message: ERROR_MESSAGES.PASSWORD_CHANGED_SUCCESSFULLY,
     });
-
   } catch (error) {
     console.error("Change password error:", error);
     return res.status(500).json({
@@ -1164,7 +1148,7 @@ const verifyResetOtp = async (req, res) => {
     const oldPasswords = [
       user.old_passwords.previous_password1,
       user.old_passwords.previous_password2,
-      user.old_passwords.previous_password3
+      user.old_passwords.previous_password3,
     ];
 
     for (const oldPassword of oldPasswords) {
@@ -1178,8 +1162,10 @@ const verifyResetOtp = async (req, res) => {
     }
 
     // Update old passwords (shift previous passwords)
-    user.old_passwords.previous_password3 = user.old_passwords.previous_password2;
-    user.old_passwords.previous_password2 = user.old_passwords.previous_password1;
+    user.old_passwords.previous_password3 =
+      user.old_passwords.previous_password2;
+    user.old_passwords.previous_password2 =
+      user.old_passwords.previous_password1;
     user.old_passwords.previous_password1 = user.basic_details.password;
 
     // Update password
@@ -1339,7 +1325,7 @@ const verifyRequest = async (req, res) => {
       status: "true",
       message: "OTP sent successfully",
       verify_to: verify_to,
-      otp_verification_endpoint: `https://digivahan.in/api/user/verify/confirm/${verificationId}`,
+      otp_verification_endpoint: `api/user/verify/confirm/${verificationId}`,
       verification_id: verificationId,
     });
   } catch (error) {
@@ -1360,8 +1346,6 @@ const verifyConfirm = async (req, res) => {
   try {
     const { verificationId } = req.params;
     const { verify_to, otp_channel, otp } = req.body;
-
-    console.log(verify_to, otp_channel, otp, verificationId);
 
     // Validate otp_channel
     if (!["EMAIL", "PHONE"].includes(otp_channel)) {

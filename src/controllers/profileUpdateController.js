@@ -40,6 +40,8 @@ const UpdateUserDetails = async (req, res) => {
     if (first_name) user.basic_details.first_name = first_name;
     if (last_name) user.basic_details.last_name = last_name;
     if (email) user.basic_details.email = email;
+    if (email) user.basic_details.is_email_primary = false;
+    if (email) user.basic_details.is_email_verified = false;
     if (phone_number) user.basic_details.phone_number = phone_number;
     if (occupation) user.basic_details.occupation = occupation;
 
