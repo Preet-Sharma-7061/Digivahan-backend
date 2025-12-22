@@ -48,15 +48,14 @@ const sendNotification = async (req, res) => {
       });
     }
 
-    let incidentProofArray = [];
+    // 3️⃣ Normalize incident proof
+    const incidentProofArray = Array.isArray(incident_proof)
+      ? incident_proof
+      : incident_proof
+      ? [incident_proof]
+      : [];
 
-    if (Array.isArray(incident_proof)) {
-      incidentProofArray = incident_proof;
-    } else if (incident_proof) {
-      incidentProofArray = [incident_proof];
-    }
-
-    // 3️⃣ Push notification into receiver.notifications
+    // 4️⃣ Save notification in DB (ONLY schema fields)
     receiver.notifications.push({
       sender_id,
       sender_pic: senderPic,
@@ -75,13 +74,33 @@ const sendNotification = async (req, res) => {
       inapp_notification,
     });
 
-    // 4️⃣ Save receiver
     await receiver.save();
+
+    const savedNotification = receiver.notifications.at(-1);
+
+    // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
+    if (receiver._id) {
+      await sendOneSignalNotification({
+        externalUserId:  receiver._id.toString(), // ✅ USER schema se
+        title: notification_title,
+        message,
+        data: {
+          sender_id,
+          notification_type,
+          order_id: order_id || "",
+          vehicle_id: vehicle_id || "",
+          chat_room_id: chat_room_id || "",
+          issue_type: issue_type || "",
+          latitude: latitude || "",
+          longitude: longitude || "",
+        },
+      });
+    }
 
     return res.status(201).json({
       status: true,
       message: "Notification sent successfully",
-      data: receiver.notifications.at(-1), // last added notification
+      data: savedNotification,
     });
   } catch (error) {
     console.error("Send notification error:", error);
@@ -93,7 +112,44 @@ const sendNotification = async (req, res) => {
   }
 };
 
+const sendOneSignalNotification = async ({
+  externalUserId,
+  title,
+  message,
+  data = {},
+}) => {
+  try {
 
+    const payload = {
+      app_id: process.env.ONESIGNAL_APP_ID,
+
+      // 🔥 PARTICULAR DEVICE (BEST WAY)
+      include_external_user_ids: [externalUserId],
+
+      headings: { en: title },
+      contents: { en: message },
+
+      // 🔥 ADDITIONAL DATA (ANDROID READ KAREGA)
+      data,
+    };
+
+    const response = await axios.post(
+      "https://onesignal.com/api/v1/notifications",
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("OneSignal Error:", error.response?.data || error.message);
+    throw error;
+  }
+};
 
 const getAllNotification = async (req, res) => {
   try {
