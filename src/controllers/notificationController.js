@@ -86,7 +86,7 @@ const sendNotification = async (req, res) => {
         message,
         data: {
           sender_id,
-          notification_type,
+          notification_type:"vehicle_channel",
           order_id: order_id || "",
           vehicle_id: vehicle_id || "",
           chat_room_id: chat_room_id || "",
