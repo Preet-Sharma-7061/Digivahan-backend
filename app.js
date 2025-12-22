@@ -14,6 +14,7 @@ const razorpayRoutes = require("./src/routes/razorpay.routes");
 const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes");
 const newsRoutes = require("./src/routes/news.routes");
 const tipsTricksRoutes = require("./src/routes/tipsTricks.routes");
+const notificationImageRoutes = require("./src/routes/notificationImage.routes");
 
 // Hasan Code End Here
 
@@ -81,6 +82,7 @@ app.use(razorpayRoutes);
 app.use(qrBenefitsRoutes);
 app.use(newsRoutes);
 app.use(tipsTricksRoutes);
+app.use(notificationImageRoutes);
 // Hasan Code End Here
 
 // -------------------- ROUTES --------------------
