@@ -39,6 +39,7 @@ const userOrderRoutes = require("./src/routes/order.routes.js");
 const roomRoutes = require("./src/routes/rooom.routes.js");
 const notificationRoutes = require("./src/routes/notification.routes.js");
 const QRroutes = require("./src/routes/qr.routes.js")
+const chatRoutes = require("./src/routes/chats.routes.js")
 
 // Dashboard Routes
 const trendingCarsRoutes = require("./src/routes/trendingCars.route.js")
@@ -57,7 +58,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 
 
-// Database connection middleware 
+// Database connection middleware
 app.use(async (req, res, next) => {
   try {
     // Only connect if not already connected
@@ -101,6 +102,7 @@ app.use(API_ROUTES.NOTIFICATION.BASE, notificationRoutes);
 app.use(API_ROUTES.QR.BASE, QRroutes)
 app.use(API_ROUTES.TRENDING_CARS.BASE, trendingCarsRoutes)
 app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes)
+app.use(API_ROUTES.CHAT.BASE, chatRoutes)
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file
