@@ -261,7 +261,7 @@ const API_ROUTES = {
     BASE: "/api",
     COMPARE: "/vehicles/compare",
     UPDATE:"/vehicle/compare-update",
-    GET_COMPARISON: "/vehicles/compare/:comparison_id",
+    GET_COMPARISON: "/vehicles/compare/get-all-compare",
     GET_BY_CARS: "/vehicles/compare/cars/:car_1/:car_2",
     DELETE_COMPARISON: "/vehicles/compare/:comparison_id",
   },

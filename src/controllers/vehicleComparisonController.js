@@ -148,4 +148,36 @@ const CompareVehicleUpdate = async (req, res) => {
   }
 };
 
-module.exports = { CompareVehicle, CompareVehicleUpdate };
+const getAllvehicleCompairesionList = async (req, res) => {
+  try {
+    // 🔍 find all comparisons (latest first)
+    const comparisons = await VehicleComparison.find()
+      .sort({ createdAt: -1 });
+
+    // ❗ no data case
+    if (!comparisons || comparisons.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No vehicle comparisons found",
+        data: [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Vehicle comparison list fetched successfully",
+      total: comparisons.length,
+      data: comparisons,
+    });
+  } catch (error) {
+    console.error("Get vehicle comparison list error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+
+module.exports = { CompareVehicle, CompareVehicleUpdate, getAllvehicleCompairesionList };
