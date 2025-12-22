@@ -15,8 +15,7 @@ const chatListSchema = new mongoose.Schema(
       {
         // 🧑 Sender
         sender_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
+          type: String,
           required: true,
           index: true,
         },

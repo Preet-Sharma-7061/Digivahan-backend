@@ -77,14 +77,14 @@ const SendUserMessage = async (req, res) => {
     }
 
     return res.status(201).json({
-      success: true,
+      status: true,
       message: "Message sent successfully",
       data: chatMessage,
     });
   } catch (error) {
     console.error("SendUserMessage Error:", error);
     return res.status(500).json({
-      success: false,
+      status: false,
       message: "Internal server error",
       error: error.message,
     });
@@ -94,7 +94,6 @@ const SendUserMessage = async (req, res) => {
 const getallChatDetails = async (req, res) => {
   try {
     const { chat_room_id } = req.params;
-    console.log(chat_room_id);
 
     // 🔴 Validation
     if (!chat_room_id) {
@@ -120,14 +119,14 @@ const getallChatDetails = async (req, res) => {
       .lean();
 
     return res.status(200).json({
-      success: true,
+      status: true,
       totalMessages: chats.length,
       data: chats,
     });
   } catch (error) {
     console.error("Get chat details error:", error);
     return res.status(500).json({
-      success: false,
+      status: false,
       message: "Internal server error",
     });
   }

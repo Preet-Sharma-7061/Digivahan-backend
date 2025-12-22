@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const axios = require("axios");
 
 const sendNotification = async (req, res) => {
   try {
@@ -91,6 +92,8 @@ const sendNotification = async (req, res) => {
     });
   }
 };
+
+
 
 const getAllNotification = async (req, res) => {
   try {
