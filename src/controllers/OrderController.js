@@ -548,7 +548,7 @@ const OrderCancel = async (req, res) => {
     }
 
     // 5️⃣ Update ORDER schema
-    order.ship_rocket.status = "CANCELLED";
+    order.ship_rocket.status = "CANCELED";
     order.ship_rocket.delivery_code = "";
 
     await order.save();
@@ -561,7 +561,7 @@ const OrderCancel = async (req, res) => {
       },
       {
         $set: {
-          "my_orders.$.order_data.ship_rocket.status": "CANCELLED",
+          "my_orders.$.order_data.ship_rocket.status": "CANCELED",
           "my_orders.$.order_data.ship_rocket.delivery_code": "",
         },
       }
