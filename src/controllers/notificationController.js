@@ -117,7 +117,7 @@ const sendOneSignalNotification = async ({
   title,
   message,
   data = {},
-  androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
+  // androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
 }) => {
   try {
     const payload = {
@@ -133,7 +133,7 @@ const sendOneSignalNotification = async ({
       data,
 
       // ✅ THIS IS THE FIX (MANDATORY FOR ANDROID CLOSED APP)
-      android_channel_id: androidChannelId,
+      // android_channel_id: androidChannelId,
     };
 
     const response = await axios.post(
