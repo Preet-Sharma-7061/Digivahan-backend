@@ -13,7 +13,7 @@ const {
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
-  seenNotificationByUser
+  seenNotificationByUser,
 } = require("../controllers/notificationController.js");
 
 router.post(
@@ -34,12 +34,9 @@ router.get(
 
 router.post(
   API_ROUTES.NOTIFICATION.SEEN_NOTIFICATION,
-  [
-    commonValidations.userId("user_id"),
-    handleValidationErrors
-  ],
+  [commonValidations.userId("user_id"), handleValidationErrors],
   seenNotificationByUser
-)
+);
 
 router.post(
   API_ROUTES.NOTIFICATION.CHECK_SECURITY_CODE,
@@ -59,7 +56,8 @@ router.post(
     handleValidationErrors,
   ],
   verifySecurityCode
-)
+);
+
 
 
 module.exports = router;

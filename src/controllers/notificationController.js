@@ -112,30 +112,73 @@ const sendNotification = async (req, res) => {
   }
 };
 
+
+// const sendOneSignalNotification = async ({
+//   externalUserId,
+//   title,
+//   message,
+//   data = {},
+//   androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
+// }) => {
+//   try {
+//     const payload = {
+//       app_id: process.env.ONESIGNAL_APP_ID,
+
+//       // 🔥 PARTICULAR DEVICE (BEST WAY)
+//       include_external_user_ids: [externalUserId],
+
+//       headings: { en: title },
+//       contents: { en: message },
+
+//         // ✅ THIS IS THE FIX (MANDATORY FOR ANDROID CLOSED APP)
+//       // android_channel_id: androidChannelId,
+
+//       // 🔥 ADDITIONAL DATA (ANDROID READ KAREGA)
+//       data,
+//     };
+
+//     const response = await axios.post(
+//       "https://onesignal.com/api/v1/notifications",
+//       payload,
+//       {
+//         headers: {
+//           "Content-Type": "application/json",
+//           Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
+//         },
+//       }
+//     );
+
+//     return response.data;
+//   } catch (error) {
+//     console.error("OneSignal Error:", error.response?.data || error.message);
+//     throw error;
+//   }
+// };
+
 const sendOneSignalNotification = async ({
   externalUserId,
   title,
   message,
   data = {},
-  // androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
+  androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279", // 👈 Vehicle Alerts channel
 }) => {
   try {
     const payload = {
       app_id: process.env.ONESIGNAL_APP_ID,
-
-      // 🔥 PARTICULAR DEVICE (BEST WAY)
+ 
+      // Target specific device
       include_external_user_ids: [externalUserId],
-
+ 
       headings: { en: title },
       contents: { en: message },
-
-      // 🔥 ADDITIONAL DATA (ANDROID READ KAREGA)
+ 
+      // ✅ THIS IS THE KEY FIX
+      android_channel_id: androidChannelId,
+ 
+      // App-side logic data (unchanged)
       data,
-
-      // ✅ THIS IS THE FIX (MANDATORY FOR ANDROID CLOSED APP)
-      // android_channel_id: androidChannelId,
     };
-
+ 
     const response = await axios.post(
       "https://onesignal.com/api/v1/notifications",
       payload,
@@ -146,7 +189,7 @@ const sendOneSignalNotification = async ({
         },
       }
     );
-
+ 
     return response.data;
   } catch (error) {
     console.error("OneSignal Error:", error.response?.data || error.message);

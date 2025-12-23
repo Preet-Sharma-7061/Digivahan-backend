@@ -265,6 +265,11 @@ const userSchema = new mongoose.Schema({
   live_tracking: {
     is_tracking_on: { type: Boolean, default: false },
   },
+  player_id: {
+    type: String,
+    default: "",
+    trim: true,
+  },
   notifications: [notificationSchema],
   my_orders: [userMyOrderSchema],
   address_book: [addressSchema],

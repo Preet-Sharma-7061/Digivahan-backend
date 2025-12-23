@@ -25,7 +25,6 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
-
     // 4️⃣ If images uploaded → save Cloudinary URLs
     if (req.files?.profile_pic?.[0]?.path) {
       user.basic_details.profile_pic = req.files.profile_pic[0].path;
@@ -187,4 +186,48 @@ const getUserDetails = async (req, res) => {
   }
 };
 
-module.exports = { UpdateUserDetails, getUserDetails };
+const SendPlayerIdtoUser = async (req, res) => {
+  try {
+    const { user_id, player_id } = req.body;
+
+    if (!user_id || !player_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and player_id are required",
+      });
+    }
+
+    // ===== 1️⃣ Find user =====
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // ===== 2️⃣ Update / Replace player_id =====
+    user.player_id = player_id; // 🔥 overwrite old with new
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Player ID updated successfully",
+      data: {
+        user_id: user._id,
+        player_id: user.player_id,
+      },
+    });
+  } catch (error) {
+    console.error("SendPlayerIdtoUser Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { UpdateUserDetails, getUserDetails, SendPlayerIdtoUser };

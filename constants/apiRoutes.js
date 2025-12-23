@@ -194,6 +194,7 @@ const API_ROUTES = {
     BASE: "/api",
     UPDATE: "/update_user",
     GET_USER_DETAILS: "/get_user_details",
+    ADD_PLAYER_ID: "/add/player-id",
   },
 
   // Emergency Contact routes
@@ -260,7 +261,7 @@ const API_ROUTES = {
   VEHICLE_COMPARISON_UPDATE: {
     BASE: "/api",
     COMPARE: "/vehicles/compare",
-    UPDATE:"/vehicle/compare-update",
+    UPDATE: "/vehicle/compare-update",
     GET_COMPARISON: "/vehicles/compare/get-all-compare",
     GET_BY_CARS: "/vehicles/compare/cars/:car_1/:car_2",
     DELETE_COMPARISON: "/vehicles/compare/:comparison_id",
