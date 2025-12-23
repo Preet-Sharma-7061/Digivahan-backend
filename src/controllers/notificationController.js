@@ -81,12 +81,12 @@ const sendNotification = async (req, res) => {
     // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
     if (receiver._id) {
       await sendOneSignalNotification({
-        externalUserId:  receiver._id.toString(), // ✅ USER schema se
+        externalUserId: receiver._id.toString(), // ✅ USER schema se
         title: notification_title,
         message,
         data: {
           sender_id,
-          notification_type:"vehicle_channel",
+          notification_type,
           order_id: order_id || "",
           vehicle_id: vehicle_id || "",
           chat_room_id: chat_room_id || "",
@@ -117,9 +117,9 @@ const sendOneSignalNotification = async ({
   title,
   message,
   data = {},
+  androidChannelId = "vehicle_channel",
 }) => {
   try {
-
     const payload = {
       app_id: process.env.ONESIGNAL_APP_ID,
 
@@ -131,6 +131,9 @@ const sendOneSignalNotification = async ({
 
       // 🔥 ADDITIONAL DATA (ANDROID READ KAREGA)
       data,
+
+      // ✅ THIS IS THE FIX (MANDATORY FOR ANDROID CLOSED APP)
+      android_channel_id: androidChannelId,
     };
 
     const response = await axios.post(

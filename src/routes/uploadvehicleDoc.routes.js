@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload } = require("../middleware/cloudinary.js");
+const { uploadpdf } = require("../middleware/cloudinary.js");
 
 const {
   handleValidationErrors,
@@ -16,7 +16,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.post(
   API_ROUTES.UPLOAD.FILE_UPLOAD.SINGLE,
-  upload.single("doc_file"),
+  uploadpdf.single("doc_file"),
   [
     commonValidations.userId("user_id"),
     commonValidations.docType("doc_type"),
