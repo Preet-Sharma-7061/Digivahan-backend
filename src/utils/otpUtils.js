@@ -42,111 +42,80 @@ const generateVerificationId = () => {
  * @param {string} templateType - Type of OTP (signup, login, reset)
  * @returns {Promise<boolean>} - Success status
  */
-const sendOTPViaSMS = async (phone, otp) => {
+const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
   try {
-    // Twilio Config
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    // PRP SMS API configuration
+    const prpSmsConfig = {
+      apiUrl:
+        process.env.PRP_SMS_API_URL ||
+        "https://api.prpsms.biz/BulkSMSapi/keyApiSendSMS/SendSmsTemplateName",
+      apiKey: process.env.PRP_SMS_API_KEY,
+      sender: process.env.PRP_SMS_SENDER || "DGVAHN",
+      templates: {
+        signup: process.env.PRP_SMS_SIGNUP_TEMPLATE_NAME || "SignUp_OTP",
+        login: process.env.PRP_SMS_LOGIN_TEMPLATE_NAME || "Login_OTP",
+        reset: process.env.PRP_SMS_RESET_TEMPLATE_NAME || "ResetPassword_OTP",
+        verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
+      },
+    };
 
-    if (!process.env.TWILIO_PHONE_NUMBER) {
-      console.error("TWILIO_PHONE_NUMBER is missing in .env");
+    // Validate configuration
+    if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
+      console.error(
+        "PRP SMS configuration missing. Please check environment variables."
+      );
       return false;
     }
 
-    // Send SMS through Twilio
-    const result = await client.messages.create({
-      body: `Your OTP is ${otp}. It is valid for 10 minutes.`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: `+91${phone}`, // Add +91 for India
-    });
-
-    console.log("📱 SMS Sent Successfully!", result.sid);
-    return true;
-    // // PRP SMS API configuration
-    // const prpSmsConfig = {
-    //   apiUrl:
-    //     process.env.PRP_SMS_API_URL ||
-    //     "https://api.bulksmsadmin.com/BulkSMSapi/keyApiSendSMS/SendSmsTemplateName",
-    //   apiKey: process.env.PRP_SMS_API_KEY,
-    //   sender: process.env.PRP_SMS_SENDER || "DGVAHN",
-    //   templates: {
-    //     signup: process.env.PRP_SMS_SIGNUP_TEMPLATE_NAME || "SignUp_OTP",
-    //     login: process.env.PRP_SMS_LOGIN_TEMPLATE_NAME || "Login_OTP",
-    //     reset: process.env.PRP_SMS_RESET_TEMPLATE_NAME || "ResetPassword_OTP",
-    //     verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
-    //   },
-    // };
-
-    // // Validate configuration
-    // if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
-    //   console.error(
-    //     "PRP SMS configuration missing. Please check environment variables."
-    //   );
-    //   return false;
-    // }
-
-    // // Get template name based on type
-    // const templateName = prpSmsConfig.templates[templateType];
-    // if (!templateName) {
-    //   console.error(`Template name not found for type: ${templateType}`);
-    //   return false;
-    // }
-
-    // // Prepare SMS payload for PRP SMS API
-    // const smsPayload = {
-    //   sender: prpSmsConfig.sender,
-    //   templateName: templateName,
-    //   smsReciever: [
-    //     {
-    //       mobileNo: phone,
-    //       templateParams: otp,
-    //     },
-    //   ],
-    // };
-
-    // // Send SMS via PRP SMS API
-    // const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //     Accept: "application/json",
-    //     apikey: prpSmsConfig.apiKey,
-    //   },
-    //   timeout: 10000, // 10 second timeout
-    // });
-
-    // // Check response status
-    // if (response.data.isSuccess) {
-    //   console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
-    //   console.log(`Response:`, response.data);
-    //   return true;
-    // } else {
-    //   console.error("PRP SMS API error:", response.data);
-    //   return false;
-    // }
-  } catch (error) {
-    console.error("❌ Error sending SMS via Twilio:", error.message);
-
-    // Development fallback
-    if (process.env.NODE_ENV === "development") {
-      console.log(`📱 [DEV] OTP to ${phone}: ${otp}`);
-      return true;
+    // Get template name based on type
+    const templateName = prpSmsConfig.templates[templateType];
+    if (!templateName) {
+      console.error(`Template name not found for type: ${templateType}`);
+      return false;
     }
 
-    return false; 
+    // Prepare SMS payload for PRP SMS API
+    const smsPayload = {
+      sender: prpSmsConfig.sender,
+      templateName: templateName,
+      smsReciever: [
+        {
+          mobileNo: phone,
+          templateParams: otp,
+        },
+      ],
+    };
 
-    // console.error("Error sending SMS via PRP SMS:", error.message);
+    // Send SMS via PRP SMS API
+    const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        apikey: prpSmsConfig.apiKey,
+      },
+      timeout: 10000, // 10 second timeout
+    });
 
-    // // Fallback to console log for development
-    // if (process.env.NODE_ENV === "development") {
-    //   console.log(
-    //     `📱 [DEV] SMS would be sent to ${phone}: Your OTP is ${otp}. Valid for 10 minutes.`
-    //   );
-    //   return true;
-    // }
+    // Check response status
+    if (response.data.isSuccess) {
+      console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
+      console.log(`Response:`, response.data);
+      return true;
+    } else {
+      console.error("PRP SMS API error:", response.data);
+      return false;
+    }
+  } catch (error) {
+    console.error("Error sending SMS via PRP SMS:", error.message);
 
-    // return false;
+    // Fallback to console log for development
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `📱 [DEV] SMS would be sent to ${phone}: Your OTP is ${otp}. Valid for 10 minutes.`
+      );
+      return true;
+    }
+    return false;
   }
 };
 
@@ -234,7 +203,7 @@ const sendOTPViaEmail = async (email, otp, templateType = "signup") => {
  * @returns {Promise<boolean>} - Success status
  */
 const sendOTP = async (contact, otp, channel, templateType = "signup") => {
-  console.log(contact, otp, channel,);
+  console.log(contact, otp, channel);
 
   try {
     if (channel === OTP_CHANNEL.PHONE) {
