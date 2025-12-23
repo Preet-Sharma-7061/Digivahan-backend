@@ -1,6 +1,6 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
-const { deleteCloudinaryImage } = require("../middleware/cloudinary");
+const { deleteFromCloudinary } = require("../middleware/cloudinary");
 
 const AddEmergencyContact = async (req, res) => {
   try {
@@ -151,7 +151,7 @@ const DeleteUserEmergencyContact = async (req, res) => {
     // 3️⃣ Delete profile image from Cloudinary if exists
     if (contact.public_id) {
       try {
-        await deleteCloudinaryImage(contact.public_id);
+        await deleteFromCloudinary(contact.public_id);
       } catch (err) {
         console.log("Cloudinary delete failed:", err);
       }

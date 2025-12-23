@@ -1,5 +1,5 @@
 const User = require("../models/User");
-const { deleteCloudinaryImage } = require("../middleware/cloudinary");
+const { deleteFromCloudinary } = require("../middleware/cloudinary");
 
 const UploadvehicleDoc = async (req, res) => {
   try {
@@ -119,7 +119,7 @@ const deleteVehicleDoc = async (req, res) => {
 
     // 4️⃣ Delete from Cloudinary
     if (document.public_id) {
-      await deleteCloudinaryImage(document.public_id);
+      await deleteFromCloudinary(document.public_id);
     }
 
     // 5️⃣ Remove document from documents array

@@ -117,7 +117,7 @@ const sendOneSignalNotification = async ({
   title,
   message,
   data = {},
-  androidChannelId = "vehicle_channel",
+  androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
 }) => {
   try {
     const payload = {

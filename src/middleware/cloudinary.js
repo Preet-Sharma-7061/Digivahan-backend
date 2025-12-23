@@ -25,15 +25,20 @@ const upload = multer({ storage });
 // Cloudinary Storage (PDF Only)
 const pdfStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: "vehicle_docs/pdf", // ← specific folder for PDF
-    resource_type: "raw", // ← required for PDF
-    allowed_formats: ["pdf"], // ← allow only pdf
-  },
+  params: async () => ({
+    folder: "vehicle_docs/pdf",
+    resource_type: "raw", // 🔥 change
+    format: "pdf",
+  }),
 });
 
 // // Correct Multer PDF upload middleware
-const uploadpdf = multer({ storage: pdfStorage });
+const uploadpdf = multer({
+  storage: pdfStorage,
+  limits: {
+    fileSize: 2 * 1024 * 1024, // ✅ 2MB
+  },
+});
 
 // Memory storage – keeps file in buffer
 const multerstorage = multer.memoryStorage();
@@ -42,13 +47,23 @@ const profilePicParser = multer({
 }).single("profile_pic");
 
 // Delete image from cloudinary
-const deleteCloudinaryImage = async (public_id) => {
-  if (!public_id) return;
-
+const deleteFromCloudinary = async (publicId) => {
   try {
-    await cloudinary.uploader.destroy(public_id);
-  } catch (err) {
-    console.error("Cloudinary delete error:", err);
+    // 1️⃣ Try deleting as IMAGE
+    let result = await cloudinary.uploader.destroy(publicId);
+
+    // 2️⃣ If not found as image, try RAW (pdf, doc, etc.)
+    if (result.result === "not found") {
+      result = await cloudinary.uploader.destroy(publicId, {
+        resource_type: "raw",
+      });
+    }
+
+    console.log("Cloudinary delete result:", result);
+    return result;
+  } catch (error) {
+    console.error("Cloudinary delete error:", error);
+    throw error;
   }
 };
 
@@ -74,7 +89,7 @@ const uploadQrToCloudinary = (buffer, qr_id) => {
 module.exports = {
   upload,
   uploadpdf,
-  deleteCloudinaryImage,
+  deleteFromCloudinary,
   profilePicParser,
   uploadQrToCloudinary,
 };
