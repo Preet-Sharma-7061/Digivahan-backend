@@ -233,7 +233,8 @@ const notificationSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema({
   basic_details: {
-    profile_pic: { type: String, default: "" },
+    profile_pic: { type: String, default: ""},
+    public_id: { type: String, default: "" },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
     phone_number: { type: String, trim: true, unique: true },
@@ -248,6 +249,7 @@ const userSchema = new mongoose.Schema({
   },
   public_details: {
     public_pic: { type: String, default: "" },
+    public_id: { type: String, default: "" },
     nick_name: { type: String, default: "" },
     address: { type: String, default: "" },
     age: { type: Number, default: 0 },

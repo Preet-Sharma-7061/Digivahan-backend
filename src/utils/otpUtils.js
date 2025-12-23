@@ -1,6 +1,5 @@
 const crypto = require("crypto");
 const axios = require("axios");
-const twilio = require("twilio");
 const { OTP_CONFIG, OTP_CHANNEL } = require("../../constants");
 const { getMailOptions, transporter } = require("./sendEmail");
 

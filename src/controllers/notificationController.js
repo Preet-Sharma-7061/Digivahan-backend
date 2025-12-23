@@ -78,6 +78,14 @@ const sendNotification = async (req, res) => {
 
     const savedNotification = receiver.notifications.at(-1);
 
+    const ANDROID_CHANNEL_MAP = {
+      no_parking: "0b251d79-aa58-4410-ac8b-a810849ce1c6",
+    };
+
+    const DEFAULT_ANDROID_CHANNEL = "54dcadaf-229d-4f03-8574-e9b1f4060279";
+
+    const androidChannelId = ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
+
     // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
     if (receiver._id) {
       await sendOneSignalNotification({
@@ -94,6 +102,7 @@ const sendNotification = async (req, res) => {
           latitude: latitude || "",
           longitude: longitude || "",
         },
+        androidChannelId,
       });
     }
 
@@ -112,73 +121,30 @@ const sendNotification = async (req, res) => {
   }
 };
 
-
-// const sendOneSignalNotification = async ({
-//   externalUserId,
-//   title,
-//   message,
-//   data = {},
-//   androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279",
-// }) => {
-//   try {
-//     const payload = {
-//       app_id: process.env.ONESIGNAL_APP_ID,
-
-//       // 🔥 PARTICULAR DEVICE (BEST WAY)
-//       include_external_user_ids: [externalUserId],
-
-//       headings: { en: title },
-//       contents: { en: message },
-
-//         // ✅ THIS IS THE FIX (MANDATORY FOR ANDROID CLOSED APP)
-//       // android_channel_id: androidChannelId,
-
-//       // 🔥 ADDITIONAL DATA (ANDROID READ KAREGA)
-//       data,
-//     };
-
-//     const response = await axios.post(
-//       "https://onesignal.com/api/v1/notifications",
-//       payload,
-//       {
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
-//         },
-//       }
-//     );
-
-//     return response.data;
-//   } catch (error) {
-//     console.error("OneSignal Error:", error.response?.data || error.message);
-//     throw error;
-//   }
-// };
-
 const sendOneSignalNotification = async ({
   externalUserId,
   title,
   message,
   data = {},
-  androidChannelId = "54dcadaf-229d-4f03-8574-e9b1f4060279", // 👈 Vehicle Alerts channel
+  androidChannelId,
 }) => {
   try {
     const payload = {
       app_id: process.env.ONESIGNAL_APP_ID,
- 
+
       // Target specific device
       include_external_user_ids: [externalUserId],
- 
+
       headings: { en: title },
       contents: { en: message },
- 
+
       // ✅ THIS IS THE KEY FIX
       android_channel_id: androidChannelId,
- 
+
       // App-side logic data (unchanged)
       data,
     };
- 
+
     const response = await axios.post(
       "https://onesignal.com/api/v1/notifications",
       payload,
@@ -189,7 +155,7 @@ const sendOneSignalNotification = async ({
         },
       }
     );
- 
+
     return response.data;
   } catch (error) {
     console.error("OneSignal Error:", error.response?.data || error.message);
