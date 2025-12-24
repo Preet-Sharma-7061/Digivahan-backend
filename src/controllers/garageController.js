@@ -452,7 +452,7 @@ const removeVehicle = async (req, res) => {
 
     // Find vehicle by actual location of vehicle_id (inside api_data)
     const vehicleIndex = user.garage.vehicles.findIndex(
-      (vehicle) => vehicle.api_data.vehicle_id === vehicle_number
+      (vehicle) => vehicle.vehicle_id === vehicle_number
     );
 
     console.log("Found index:", vehicleIndex);
