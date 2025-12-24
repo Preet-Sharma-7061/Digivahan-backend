@@ -80,11 +80,20 @@ const sendNotification = async (req, res) => {
 
     const ANDROID_CHANNEL_MAP = {
       no_parking: "0b251d79-aa58-4410-ac8b-a810849ce1c6",
+      congested_parking: "5fbca66a-703c-459e-bcfa-c3815f25b2bb",
+      road_block_alert: "1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
+      blocked_vehicle_alert: "80a16cd8-e359-43be-8ea5-d31ddfab6338",
+      car_lights_windows_left_open: "d13bad07-8593-4603-960e-e140317410db",
+      car_horn_alarm_going_on: "8bd1c0ed-7865-4f41-9f95-81a9b37310b8",
+      unknown_issue_alert: "5bd7c478-55c0-42a7-b87f-472c0013ec1f",
+      doc_access: "b4258f1b-b16e-4d8b-920f-fdcc394eb79f",
+      accident_alert: "99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
     };
 
     const DEFAULT_ANDROID_CHANNEL = "54dcadaf-229d-4f03-8574-e9b1f4060279";
 
-    const androidChannelId = ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
+    const androidChannelId =
+      ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
 
     // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
     if (receiver._id) {

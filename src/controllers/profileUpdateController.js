@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const { deleteFromCloudinary } = require("../middleware/cloudinary");
 
 const UpdateUserDetails = async (req, res) => {
   try {
@@ -15,7 +16,7 @@ const UpdateUserDetails = async (req, res) => {
       gender,
     } = req.body;
 
-    // 1️⃣ Find existing user
+    // ===== 1️⃣ Find existing user =====
     const user = await User.findById(user_id);
 
     if (!user) {
@@ -25,34 +26,56 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
-    // 4️⃣ If images uploaded → save Cloudinary URLs
+    // 🔥 Store old public_ids (for deletion later)
+    let oldProfilePublicId = null;
+    let oldPublicPublicId = null;
+
+    // ===== 2️⃣ Profile Pic Update =====
     if (req.files?.profile_pic?.[0]?.path) {
+      oldProfilePublicId = user.basic_details.public_id || null;
+
       user.basic_details.profile_pic = req.files.profile_pic[0].path;
+      user.basic_details.public_id = req.files.profile_pic[0].filename;
     }
 
+    // ===== 3️⃣ Public Pic Update =====
     if (req.files?.public_pic?.[0]?.path) {
+      oldPublicPublicId = user.public_details.public_id || null;
+
       user.public_details.public_pic = req.files.public_pic[0].path;
+      user.public_details.public_id = req.files.public_pic[0].filename;
     }
 
-    // 2️⃣ Update basic details
+    // ===== 4️⃣ Update basic details =====
     if (first_name) user.basic_details.first_name = first_name;
     if (last_name) user.basic_details.last_name = last_name;
-    if (email) user.basic_details.email = email;
-    if (email) user.basic_details.is_email_primary = false;
-    if (email) user.basic_details.is_email_verified = false;
+    if (email) {
+      user.basic_details.email = email;
+      user.basic_details.is_email_primary = false;
+      user.basic_details.is_email_verified = false;
+    }
     if (phone_number) user.basic_details.phone_number = phone_number;
     if (occupation) user.basic_details.occupation = occupation;
 
-    // 3️⃣ Update public details
+    // ===== 5️⃣ Update public details =====
     if (nick_name) user.public_details.nick_name = nick_name;
     if (address) user.public_details.address = address;
-    if (age) user.public_details.age = age;
+    if (age !== undefined) user.public_details.age = age;
     if (gender) user.public_details.gender = gender;
 
-    // 5️⃣ Save updates
+    // ===== 6️⃣ Save user first =====
     await user.save();
 
-    // 6️⃣ Response
+    // ===== 7️⃣ Delete old images AFTER save =====
+    if (oldProfilePublicId) {
+      deleteFromCloudinary(oldProfilePublicId).catch(console.error);
+    }
+
+    if (oldPublicPublicId) {
+      deleteFromCloudinary(oldPublicPublicId).catch(console.error);
+    }
+
+    // ===== 8️⃣ Response =====
     return res.status(200).json({
       status: true,
       message: "User details updated successfully.",
@@ -185,7 +208,5 @@ const getUserDetails = async (req, res) => {
     });
   }
 };
-
-
 
 module.exports = { UpdateUserDetails, getUserDetails };
