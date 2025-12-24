@@ -194,7 +194,6 @@ const API_ROUTES = {
     BASE: "/api",
     UPDATE: "/update_user",
     GET_USER_DETAILS: "/get_user_details",
-    ADD_PLAYER_ID: "/add/player-id",
   },
 
   // Emergency Contact routes

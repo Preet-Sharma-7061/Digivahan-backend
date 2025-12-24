@@ -233,7 +233,7 @@ const notificationSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema({
   basic_details: {
-    profile_pic: { type: String, default: ""},
+    profile_pic: { type: String, default: "" },
     public_id: { type: String, default: "" },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
@@ -266,11 +266,6 @@ const userSchema = new mongoose.Schema({
   },
   live_tracking: {
     is_tracking_on: { type: Boolean, default: false },
-  },
-  player_id: {
-    type: String,
-    default: "",
-    trim: true,
   },
   notifications: [notificationSchema],
   my_orders: [userMyOrderSchema],

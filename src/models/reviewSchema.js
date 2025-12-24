@@ -8,6 +8,18 @@ const feedBackSchema = new mongoose.Schema(
       required: true,
     },
 
+    username: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+
+    profile_image: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     order_id: {
       type: String,
       default: "",
@@ -26,11 +38,13 @@ const feedBackSchema = new mongoose.Schema(
       max: 5,
     },
 
-    product_image: {
-      type: String,
-      trim: true,
-      default: "",
-    },
+    product_image: [
+      {
+        type: String,
+        trim: true,
+        default: "",
+      },
+    ],
 
     review_title: {
       type: String,

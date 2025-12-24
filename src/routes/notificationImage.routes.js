@@ -15,7 +15,7 @@ router.post(
 );
 
 // DELETE image
-router.delete("/api/v1/notification/image",
+router.post("/api/v1/notification/image",
      deleteNotificationImage);
 
 module.exports = router;

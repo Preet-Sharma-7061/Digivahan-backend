@@ -8,33 +8,41 @@ const addUserReview = async (req, res) => {
       order_id,
       product_type,
       rating,
-      product_image,
+      product_image = [],
       review_title,
       review_text,
     } = req.body;
 
-    // ===== 1️⃣ Validate User Exists =====
-    const userExists = await User.findById(user_id);
-    if (!userExists) {
+    // ===== 1️⃣ Find User & Get first_name + profile_pic =====
+    const user = await User.findById(user_id).select("basic_details");
+
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
-    // ===== 2️⃣ Check Review Exists (user_id + order_id) =====
+    const username = user.basic_details?.first_name || "User";
+    const profile_image = user.basic_details?.profile_pic || "";
+
+    // ===== 2️⃣ Check Existing Review =====
     const existingReview = await Feedback.findOne({
       user_id,
       order_id,
     });
 
-    // ===== 3️⃣ If exists → UPDATE only required fields =====
+    // ===== 3️⃣ Update Review If Exists =====
     if (existingReview) {
       existingReview.product_type = product_type;
       existingReview.rating = rating;
-      existingReview.product_image = product_image;
       existingReview.review_title = review_title;
       existingReview.review_text = review_text;
+
+      // 🔥 product_image is array of string
+      if (Array.isArray(product_image) && product_image.length > 0) {
+        existingReview.product_image.push(...product_image);
+      }
 
       await existingReview.save();
 
@@ -45,13 +53,15 @@ const addUserReview = async (req, res) => {
       });
     }
 
-    // ===== 4️⃣ If not exists → CREATE new review =====
+    // ===== 4️⃣ Create New Review =====
     const newReview = await Feedback.create({
       user_id,
+      username,
+      profile_image,
       order_id,
       product_type,
       rating,
-      product_image,
+      product_image: Array.isArray(product_image) ? product_image : [],
       review_title,
       review_text,
     });
@@ -70,6 +80,7 @@ const addUserReview = async (req, res) => {
     });
   }
 };
+
 
 const FetchUserFeedBack = async (req, res) => {
   try {

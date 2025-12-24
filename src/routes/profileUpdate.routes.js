@@ -11,8 +11,7 @@ const { authenticateToken } = require("../middleware/auth.js");
 
 const {
   UpdateUserDetails,
-  getUserDetails,
-  SendPlayerIdtoUser,
+  getUserDetails
 } = require("../controllers/profileUpdateController.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
@@ -38,10 +37,5 @@ router.post(
   getUserDetails
 );
 
-router.post(
-  API_ROUTES.UPDATE_USER.ADD_PLAYER_ID,
-  [commonValidations.userId("user_id"), handleValidationErrors],
-  SendPlayerIdtoUser
-);
 
 module.exports = router;
