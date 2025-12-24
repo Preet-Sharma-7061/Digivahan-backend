@@ -56,6 +56,7 @@ const GenerateOrder = async (req, res) => {
 
       // Order Item
       vehicle_id,
+      order_type,
       name,
       sku = "QR-001",
       units,
@@ -70,8 +71,6 @@ const GenerateOrder = async (req, res) => {
       breadth = 15,
       height = 10,
     } = req.body;
-
-    console.log(user_id);
 
     // -----------------------------
     // Find User
@@ -133,7 +132,8 @@ const GenerateOrder = async (req, res) => {
       // Order items
       order_items: [
         {
-          vehicle_id, // Required by your DB
+          vehicle_id,
+          order_type,
           name,
           sku,
           units,
@@ -153,6 +153,9 @@ const GenerateOrder = async (req, res) => {
       orderDataForShiprocket
     );
 
+    console.log(shiprocketResponse);
+    
+
     if (!shiprocketResponse) {
       return res.status(500).json({
         status: false,
@@ -160,8 +163,7 @@ const GenerateOrder = async (req, res) => {
       });
     }
 
-    console.log(shiprocketResponse);
-
+   
     // ------------------------------
     // Save order in MongoDB
     // ------------------------------

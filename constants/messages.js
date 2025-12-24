@@ -351,7 +351,7 @@ const ERROR_MESSAGES = {
 
   // Garage errors
   VEHICLE_ALREADY_EXISTS: "Vehicle already exists in your garage.",
-  RTO_API_FAILED: "Unable to fetch data from RTO. Please try again later.",
+  RTO_API_FAILED: "Unable to fetch data from RTO. Invalid Vehicle Number",
   INVALID_VEHICLE_NUMBER: "The vehicle number you have entered is invalid",
   VEHICLE_NOT_FOUND: "Vehicle not found in your garage",
   VEHICLE_NOT_FOUND_IN_GARAGE: "No such vehicle found in user garage.",

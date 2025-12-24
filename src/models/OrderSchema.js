@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 
 const orderItemSchema = new mongoose.Schema({
-  vehicle_id: { type: String, required: true }, // make sure it's in POST body
+  vehicle_id: { type: String, default: "" },
+  order_type: { type: String, default: "" },
   name: { type: String, required: true },
   sku: { type: String, default: "QR-001" },
   units: { type: Number, required: true },

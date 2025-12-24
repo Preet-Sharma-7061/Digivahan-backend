@@ -16,8 +16,6 @@ const newsRoutes = require("./src/routes/news.routes");
 const tipsTricksRoutes = require("./src/routes/tipsTricks.routes");
 const notificationImageRoutes = require("./src/routes/notificationImage.routes");
 
-// Hasan Code End Here
-
 // Database and utils
 const connectDB = require("./db_config/index.js");
 const startDeletionCron = require("./src/utils/cronJobs.js");

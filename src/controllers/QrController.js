@@ -200,17 +200,10 @@ const AssignedQrtoUser = async (req, res) => {
 // Check Qr in user QR List Apis
 const CheckQrInUser = async (req, res) => {
   try {
-    const { user_id, vehicle_id } = req.body;
+    const { user_id, vehicle_id, qr_id } = req.body;
 
-    // 🔴 validation
-    if (!user_id || !vehicle_id) {
-      return res.status(400).json({
-        success: false,
-        message: "user_id and vehicle_id are required",
-      });
-    }
 
-    // 🔍 find user
+    // 🔍 Find user
     const user = await User.findById(user_id);
 
     if (!user) {
@@ -220,32 +213,40 @@ const CheckQrInUser = async (req, res) => {
       });
     }
 
-    // 🧠 check qr_list
-    const qrExists = user.qr_list.find(
-      (qr) => qr.vehicle_id?.toString() === vehicle_id.toString()
-    );
+    // 🧠 Find QR by vehicle_id OR qr_id (jo mile wahi)
+    const qrExists = user.qr_list.find((qr) => {
+      if (vehicle_id && qr.vehicle_id?.toString() === vehicle_id.toString()) {
+        return true;
+      }
+      if (qr_id && qr._id.toString() === qr_id.toString()) {
+        return true;
+      }
+      return false;
+    });
 
+    // ✅ Found
     if (qrExists) {
       return res.status(200).json({
         success: true,
-        message: "QR is already exist",
-        data: qrExists, // ✅ wahi QR data send
+        message: "QR found in user QR list",
+        data: qrExists,
       });
     }
 
-    // ❌ not found
+    // ❌ Not found
     return res.status(200).json({
-      status: false,
+      success: false,
       message: "QR not found in user QR list",
     });
   } catch (error) {
     console.error("Check QR in user error:", error);
     return res.status(500).json({
-      status: false,
+      success: false,
       message: "Internal server error",
     });
   }
 };
+
 
 module.exports = {
   createQrScanner,

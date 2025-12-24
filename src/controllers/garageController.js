@@ -283,7 +283,6 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
   };
 
   return {
-    vehicle_id: vehicleNumber,
     vehicle_info: {
       owner_name: rtoData.registration?.owner?.name || "N/A",
       vehicle_number: vehicleNumber,
@@ -340,7 +339,7 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
               {
                 doc_name: "Pollution Certificate",
                 doc_number: rtoData.pollutionControl.certificateNumber,
-                doc_url: "https://placeholder.com/pollution-certificate",
+                validUpto:parseDate(rtoData.pollutionControl.validUpto)
               },
             ]
           : []),
@@ -349,7 +348,6 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
               {
                 doc_name: "Permit",
                 doc_number: rtoData.permit.number,
-                doc_url: "https://placeholder.com/permit-document",
               },
             ]
           : []),
