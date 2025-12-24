@@ -142,7 +142,7 @@ const DeleteUserAddress = async (req, res) => {
   try {
     const { user_id, address_id } = req.body;
 
-    // 2️⃣ Find user
+    // 1️⃣ Find user
     const user = await User.findById(user_id);
     if (!user) {
       return res.status(404).json({
@@ -151,7 +151,7 @@ const DeleteUserAddress = async (req, res) => {
       });
     }
 
-    // 3️⃣ Check if the address exists
+    // 2️⃣ Find address
     const address = user.address_book.id(address_id);
     if (!address) {
       return res.status(404).json({
@@ -160,10 +160,23 @@ const DeleteUserAddress = async (req, res) => {
       });
     }
 
-    // 4️⃣ Remove the address using Mongoose subdocument pull()
+    const isDeletingDefault = address.default_status === true;
+
+    // 3️⃣ Remove the address
     user.address_book.pull({ _id: address_id });
 
-    // 5️⃣ Save updated user
+    // 4️⃣ If deleted address was default → set FIRST address as default
+    if (isDeletingDefault && user.address_book.length > 0) {
+      // ✅ ensure only one default
+      user.address_book.forEach((addr) => {
+        addr.default_status = false;
+      });
+
+      // ✅ first address becomes default
+      user.address_book[0].default_status = true;
+    }
+
+    // 5️⃣ Save user
     await user.save();
 
     return res.status(200).json({
@@ -178,6 +191,7 @@ const DeleteUserAddress = async (req, res) => {
     });
   }
 };
+
 
 // Profile fields define
 
