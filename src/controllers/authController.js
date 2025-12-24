@@ -4,7 +4,9 @@ const OTP = require("../models/OTP");
 const PrimaryOTP = require("../models/PrimaryOTPSchema");
 const UserDeletion = require("../models/UserDeletion");
 const QRAssignment = require("../models/QRAssignment");
+const RevokedToken = require("../models/revokedTokenSchema");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const {
   generateOTP,
@@ -21,14 +23,8 @@ const { ERROR_MESSAGES, SUCCESS_MESSAGES } = require("../../constants");
  */
 const registerInit = async (req, res) => {
   try {
-    const {
-      first_name,
-      last_name,
-      email,
-      phone,
-      password,
-      otp_channel
-    } = req.body;
+    const { first_name, last_name, email, phone, password, otp_channel } =
+      req.body;
 
     // Check if user already exists in permanent users table
     const existingUser = await User.findOne({
@@ -917,20 +913,13 @@ const verifyLoginOtp = async (req, res) => {
       live_tracking: {
         is_tracking_on: user.live_tracking?.is_tracking_on || false,
       },
-      address_book: user.address_book || [],
-      chat_box: user.chat_box || [],
-      emergency_contacts: user.emergency_contacts || [],
-      garage: {
-        security_code: user.garage?.security_code || "",
-        vehicles: user.garage?.vehicles || [],
-      },
+      token: token,
     };
 
     res.status(200).json({
       status: true,
       message: ERROR_MESSAGES.OTP_VERIFIED_SUCCESS,
       user: userResponse,
-      token: token,
     });
   } catch (error) {
     console.error("Verify login OTP error:", error);
@@ -1511,7 +1500,6 @@ const RequestPrimaryContact = async (req, res) => {
 };
 
 // Verify OTP for set the recent primary Contact No.
-
 const VerifyOTPforsetPrimaryContact = async (req, res) => {
   try {
     const { user_id, otp } = req.body;
@@ -1567,6 +1555,44 @@ const VerifyOTPforsetPrimaryContact = async (req, res) => {
   } catch (error) {
     console.error("Error verifying OTP:", error);
     return res.status(500).json({ message: "Internal Server Error", error });
+  }
+};
+
+// Logout User
+const LogOutUser = async (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
+
+    if (!token) {
+      return res.status(401).json({
+        status: false,
+        message: "Access token required",
+      });
+    }
+
+    // 1️⃣ Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 2️⃣ Convert exp (seconds) → Date
+    const expiryDate = new Date(decoded.exp * 1000);
+
+    // 3️⃣ Save revoked token
+    await RevokedToken.create({
+      token: token,
+      date: expiryDate,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Logout successful",
+    });
+  } catch (error) {
+    return res.status(401).json({
+      status: false,
+      message: "Invalid or expired token",
+      error: error.message,
+    });
   }
 };
 
@@ -1695,6 +1721,7 @@ module.exports = {
   RequestPrimaryContact,
   VerifyOTPforsetPrimaryContact,
   ChangeUserpassword,
+  LogOutUser,
   suspendUser,
   removeUserSuspension,
 };

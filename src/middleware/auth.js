@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { ERROR_MESSAGES } = require("../../constants");
+const RevokedToken = require("../models/revokedTokenSchema");
 
 /**
  * Authentication middleware to verify JWT token
@@ -17,7 +18,19 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    // 🔥 1️⃣ Check if token is revoked (LOGOUT CHECK)
+    const revoked = await RevokedToken.findOne({ token });
+    if (revoked) {
+      return res.status(401).json({
+        status: false,
+        message: "Your token is invalid, please login again",
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-secret-key"
+    );
     const user = await User.findById(decoded.userId);
 
     if (!user) {
@@ -63,7 +76,7 @@ const authenticateToken = async (req, res, next) => {
         message: "Token expired",
       });
     }
-    
+
     console.error("Authentication error:", error);
     return res.status(500).json({
       status: false,
@@ -85,7 +98,10 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-secret-key"
+    );
     const user = await User.findById(decoded.userId);
 
     if (user && user.is_active && !user.isSuspended()) {

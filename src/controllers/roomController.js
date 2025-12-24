@@ -19,7 +19,7 @@ const createRoom = async (req, res) => {
 
     // Fetch Creator
     const creator = await User.findById(createdBy).select(
-      "basic_details.profile_pic_url basic_details.first_name basic_details.last_name"
+      "basic_details.profile_pic basic_details.first_name basic_details.last_name"
     );
 
     if (!creator)
@@ -37,7 +37,7 @@ const createRoom = async (req, res) => {
       const targetUserId = members[0];
 
       const target = await User.findById(targetUserId).select(
-        "basic_details.profile_pic_url basic_details.first_name basic_details.last_name"
+        "basic_details.profile_pic basic_details.first_name basic_details.last_name"
       );
 
       if (!target)
@@ -67,14 +67,14 @@ const createRoom = async (req, res) => {
           user_id: createdBy,
           first_name: creator.basic_details.first_name,
           last_name: creator.basic_details.last_name,
-          profile_pic_url: creator.basic_details.profile_pic_url,
+          profile_pic_url: creator.basic_details.profile_pic,
           role: "admin",
         },
         {
           user_id: targetUserId,
           first_name: target.basic_details.first_name,
           last_name: target.basic_details.last_name,
-          profile_pic_url: target.basic_details.profile_pic_url,
+          profile_pic_url: target.basic_details.profile_pic,
           role: "member",
         },
       ];
@@ -112,14 +112,14 @@ const createRoom = async (req, res) => {
       if (!members.includes(createdBy)) members.push(createdBy);
 
       const users = await User.find({ _id: { $in: members } }).select(
-        "basic_details.profile_pic_url basic_details.first_name basic_details.last_name"
+        "basic_details.profile_pic basic_details.first_name basic_details.last_name"
       );
 
       const roomMembers = users.map((u) => ({
         user_id: u._id,
         first_name: u.basic_details.first_name,
         last_name: u.basic_details.last_name,
-        profile_pic_url: u.basic_details.profile_pic_url,
+        profile_pic_url: u.basic_details.profile_pic,
         role: u._id.toString() === createdBy ? "admin" : "member",
       }));
 
@@ -212,4 +212,42 @@ const getAllChatRoomFromUserAccount = async (req, res) => {
   }
 };
 
-module.exports = { createRoom, getAllChatRoomFromUserAccount };
+const GetChatRoomInfo = async (req, res) => {
+  try {
+    const { room_id } = req.params;
+
+    if (!room_id) {
+      return res.status(400).json({
+        status: false,
+        message: "room_id is required",
+      });
+    }
+
+    // 🔍 Find room by _id
+    const room = await Room.findById(room_id);
+
+    if (!room) {
+      return res.status(404).json({
+        status: false,
+        message: "Chat room not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Chat room info fetched successfully",
+      data: room,
+    });
+  } catch (error) {
+    console.error("GetChatRoomInfo error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+
+module.exports = { createRoom, getAllChatRoomFromUserAccount, GetChatRoomInfo };

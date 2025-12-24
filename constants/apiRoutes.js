@@ -32,6 +32,10 @@ const API_ROUTES = {
       VERIFY_LOGIN_OTP: "/verify-login-otp",
     },
 
+    LOGOUT: {
+      USER_LOGOUT:"/logout-user"
+    },
+
     // Password reset routes
     PASSWORD_RESET: {
       CHANGE_PASSWORD: "/change-password",
@@ -372,6 +376,7 @@ const API_ROUTES = {
     CREATE_ROOM_FOR_CHAT: "/create/room",
     GET_USER_CHATS_ROOM_DETAILS: "/user/chat-box-deatils",
     GET_CHAT_DETAILS: "/chats/details/:chatId",
+    GET_ROOM_DETAILS:"/room/details/:room_id",
     SEND_MESSAGE: "/send/messages",
     GET_MESSAGES: "/messages/:chat_room_id",
     UPDATE_MESSAGE_STATUS: "/messages/:messageId/status",
