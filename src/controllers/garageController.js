@@ -74,9 +74,24 @@ const addVehicle = async (req, res) => {
     let dataSource = "cache";
 
     if (findInVehicleInfo) {
-      // ✔ Already available globally, no API call required
-      rtoData = findInVehicleInfo.api_data;
       console.log("✔ Vehicle fetched from VehicleInfoData");
+
+      // 🟢 Directly push existing data to user's garage
+      user.garage.vehicles.push({
+        vehicle_id: vehicle_number,
+        api_data: findInVehicleInfo.api_data,
+      });
+
+      await user.save();
+
+      return res.status(200).json({
+        status: true,
+        message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
+        data: {
+          result: findInVehicleInfo.api_data.rto_data,
+          data_source: "vehicle_info_cache",
+        },
+      });
     } else {
       // ------------------ STEP 3: CHECK RTOVehiclesStorage (your old CACHE) ------------------
       const cachedVehicle = await RTOVehiclesStorage.findByVehicleNumber(
@@ -226,6 +241,8 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
  * Transform RTO data to our vehicle schema format
  */
 const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
+  console.log("click");
+
   // Helper function to safely parse dates
   const parseDate = (dateInput) => {
     // If already a Date object and valid, return it
