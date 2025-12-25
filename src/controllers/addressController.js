@@ -12,6 +12,7 @@ const UserAddAddress = async (req, res) => {
       pincode,
       city,
       state,
+      landmark,
       default_status,
     } = req.body;
 
@@ -33,6 +34,7 @@ const UserAddAddress = async (req, res) => {
       pincode,
       city,
       state,
+      landmark,
       default: default_status,
     };
 
@@ -84,6 +86,7 @@ const UpdateUserAddress = async (req, res) => {
       pincode,
       city,
       state,
+      landmark,
     } = req.body;
 
     // 1️⃣ Find user
@@ -112,6 +115,7 @@ const UpdateUserAddress = async (req, res) => {
     if (pincode) address.pincode = pincode;
     if (city) address.city = city;
     if (state) address.state = state;
+    if (landmark) address.landmark = landmark;
 
     // 5️⃣ Set current address as default
     address.default_status = true;
@@ -191,7 +195,6 @@ const DeleteUserAddress = async (req, res) => {
     });
   }
 };
-
 
 // Profile fields define
 

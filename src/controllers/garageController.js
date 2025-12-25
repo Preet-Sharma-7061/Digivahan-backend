@@ -283,7 +283,7 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
   };
 
   return {
-    vehicle_info: {
+    custom_vehicle_info: {
       owner_name: rtoData.registration?.owner?.name || "N/A",
       vehicle_number: vehicleNumber,
       vehicle_name: `${rtoData.vehicle?.manufacturer || "Unknown"} ${
@@ -322,36 +322,6 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
       unloaded_weight: rtoData.vehicle?.unladenWeight?.toString() || "0",
       rc_status: rtoData.registration?.status?.active ? "Active" : "Inactive",
       insurance_policy_number: rtoData.insurance?.policyNumber || "N/A",
-    },
-    vehicle_documents: {
-      insurance: {
-        file_url: "", // Can be populated later
-      },
-      pollution: {
-        file_url: "", // Can be populated later
-      },
-      registration: {
-        file_url: "", // Can be populated later
-      },
-      other_documents: [
-        ...(rtoData.pollutionControl?.certificateNumber
-          ? [
-              {
-                doc_name: "Pollution Certificate",
-                doc_number: rtoData.pollutionControl.certificateNumber,
-                validUpto:parseDate(rtoData.pollutionControl.validUpto)
-              },
-            ]
-          : []),
-        ...(rtoData.permit?.number
-          ? [
-              {
-                doc_name: "Permit",
-                doc_number: rtoData.permit.number,
-              },
-            ]
-          : []),
-      ],
     },
     rto_data: rtoData, // Store complete RTO data for reference
     added_at: new Date(),

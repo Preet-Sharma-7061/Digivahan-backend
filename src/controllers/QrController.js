@@ -202,7 +202,6 @@ const CheckQrInUser = async (req, res) => {
   try {
     const { user_id, vehicle_id, qr_id } = req.body;
 
-
     // 🔍 Find user
     const user = await User.findById(user_id);
 
@@ -247,6 +246,11 @@ const CheckQrInUser = async (req, res) => {
   }
 };
 
+const QrCustomURL = async () => {
+  try {
+    const { qr_id } = req.body;
+  } catch (error) {}
+};
 
 module.exports = {
   createQrScanner,
