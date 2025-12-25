@@ -33,7 +33,7 @@ const API_ROUTES = {
     },
 
     LOGOUT: {
-      USER_LOGOUT:"/logout-user"
+      USER_LOGOUT: "/logout-user",
     },
 
     // Password reset routes
@@ -113,6 +113,7 @@ const API_ROUTES = {
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
     QR_DETAILS: "/qr/:qr_id",
+    GET_QR_TEMPLATES: "/qr-template/:qr_id",
     VALIDATE_QR: "/validate-qr",
     ASSIGN_QR: "/assign-qr",
     QR_ASSIGNMENT: "/qr-assignment",
@@ -376,7 +377,7 @@ const API_ROUTES = {
     CREATE_ROOM_FOR_CHAT: "/create/room",
     GET_USER_CHATS_ROOM_DETAILS: "/user/chat-box-deatils",
     GET_CHAT_DETAILS: "/chats/details/:chatId",
-    GET_ROOM_DETAILS:"/room/details/:room_id",
+    GET_ROOM_DETAILS: "/room/details/:room_id",
     SEND_MESSAGE: "/send/messages",
     GET_MESSAGES: "/messages/:chat_room_id",
     UPDATE_MESSAGE_STATUS: "/messages/:messageId/status",

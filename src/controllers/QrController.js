@@ -2,6 +2,7 @@ const QRAssignment = require("../models/QRAssignment");
 const User = require("../models/User");
 const { generateQRCode } = require("../middleware/qrgernator");
 const { uploadQrToCloudinary } = require("../middleware/cloudinary");
+const generateQRTemplate = require("../utils/generateQRTemplate")
 
 const createQrScanner = async (req, res) => {
   try {
@@ -246,10 +247,52 @@ const CheckQrInUser = async (req, res) => {
   }
 };
 
-const QrCustomURL = async () => {
+const QrCustomTemplateUrl = async (req, res) => {
   try {
-    const { qr_id } = req.body;
-  } catch (error) {}
+    const { qr_id } = req.params;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "qr_id is required",
+      });
+    }
+
+    // 1️⃣ Find QR Assignment
+    const qrData = await QRAssignment.findOne({ qr_id });
+
+    if (!qrData) {
+      return res.status(404).json({
+        success: false,
+        message: "QR Assignment not found",
+      });
+    }
+
+    // 2️⃣ Get QR Image URL
+    const qrImageUrl = qrData.qr_img;
+
+    if (!qrImageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "QR image URL not found in record",
+      });
+    }
+
+    // 3️⃣ Generate Template using QR URL
+    const templateUrl = await generateQRTemplate(qrImageUrl);
+    
+    // 4️⃣ Success Response
+    return res.status(200).json({
+      success: true,
+      template_url: `${process.env.BASE_URL}${templateUrl}`,
+    });
+  } catch (error) {
+    console.error("QrCustomURL Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
 };
 
 module.exports = {
@@ -257,4 +300,5 @@ module.exports = {
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
+  QrCustomTemplateUrl
 };

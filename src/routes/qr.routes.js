@@ -12,7 +12,8 @@ const {
   createQrScanner,
   getQrDetails,
   AssignedQrtoUser,
-  CheckQrInUser
+  CheckQrInUser,
+  QrCustomTemplateUrl,
 } = require("../controllers/QrController.js");
 
 router.post(
@@ -31,11 +32,14 @@ router.post(
 
 router.post(
   API_ROUTES.QR.CHECK_QR,
-  [
-    commonValidations.userId("user_id"),
-    handleValidationErrors
-  ],
+  [commonValidations.userId("user_id"), handleValidationErrors],
   CheckQrInUser
-)
+);
+
+router.get(
+  API_ROUTES.QR.GET_QR_TEMPLATES,
+  [handleValidationErrors],
+  QrCustomTemplateUrl
+);
 
 module.exports = router;
