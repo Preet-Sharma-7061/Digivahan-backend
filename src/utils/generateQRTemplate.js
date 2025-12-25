@@ -5,8 +5,8 @@ const path = require("path");
 const generateQRTemplate = async (qrImageUrl) => {
   try {
     // 🔧 Fixed template size
-    const CANVAS_WIDTH = 1002;
-    const CANVAS_HEIGHT = 370;
+    const CANVAS_WIDTH = 455;
+    const CANVAS_HEIGHT = 718;
 
     const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -25,10 +25,10 @@ const generateQRTemplate = async (qrImageUrl) => {
 
     // 3️⃣ Place QR inside template (AS-IT-IS)
     const QR_BOX = {
-      x: 52,
-      y: 54,
-      width: 200,
-      height: 220
+      x: 80,
+      y: 250,
+      width: 300,
+      height: 300
     };
 
     const QR_SIZE = Math.min(QR_BOX.width, QR_BOX.height);

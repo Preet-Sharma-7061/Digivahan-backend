@@ -1,8 +1,10 @@
+const fs = require("fs");
+const path = require("path");
 const QRAssignment = require("../models/QRAssignment");
 const User = require("../models/User");
 const { generateQRCode } = require("../middleware/qrgernator");
 const { uploadQrToCloudinary } = require("../middleware/cloudinary");
-const generateQRTemplate = require("../utils/generateQRTemplate")
+const generateQRTemplate = require("../utils/generateQRTemplate");
 
 const createQrScanner = async (req, res) => {
   try {
@@ -280,7 +282,7 @@ const QrCustomTemplateUrl = async (req, res) => {
 
     // 3️⃣ Generate Template using QR URL
     const templateUrl = await generateQRTemplate(qrImageUrl);
-    
+
     // 4️⃣ Success Response
     return res.status(200).json({
       success: true,
@@ -295,10 +297,41 @@ const QrCustomTemplateUrl = async (req, res) => {
   }
 };
 
+const getUploadedTemplateImage = (req, res) => {
+  try {
+    const uploadsDir = path.join(__dirname, "../../uploads");
+
+    if (!fs.existsSync(uploadsDir)) {
+      return res.json({ success: true, images: [] });
+    }
+
+    const files = fs.readdirSync(uploadsDir);
+
+    const images = files
+      .filter((file) => file.match(/\.(png|jpg|jpeg|webp)$/i))
+      .map((file) => ({
+        name: file,
+        url: `${process.env.BASE_URL}/uploads/${file}`,
+      }));
+
+    return res.json({
+      success: true,
+      count: images.length,
+      images,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
-  QrCustomTemplateUrl
+  QrCustomTemplateUrl,
+  getUploadedTemplateImage
 };

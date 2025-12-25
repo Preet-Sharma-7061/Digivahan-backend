@@ -114,6 +114,7 @@ const API_ROUTES = {
     GENERATE_QR: "/generate-qr",
     QR_DETAILS: "/qr/:qr_id",
     GET_QR_TEMPLATES: "/qr-template/:qr_id",
+    UPLODED_TEMPLATE: "/all/uploaded-template",
     VALIDATE_QR: "/validate-qr",
     ASSIGN_QR: "/assign-qr",
     QR_ASSIGNMENT: "/qr-assignment",

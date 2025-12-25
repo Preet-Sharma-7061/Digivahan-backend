@@ -14,6 +14,7 @@ const {
   AssignedQrtoUser,
   CheckQrInUser,
   QrCustomTemplateUrl,
+  getUploadedTemplateImage,
 } = require("../controllers/QrController.js");
 
 router.post(
@@ -40,6 +41,12 @@ router.get(
   API_ROUTES.QR.GET_QR_TEMPLATES,
   [handleValidationErrors],
   QrCustomTemplateUrl
+);
+
+router.get(
+  API_ROUTES.QR.UPLODED_TEMPLATE,
+  [handleValidationErrors],
+  getUploadedTemplateImage
 );
 
 module.exports = router;
