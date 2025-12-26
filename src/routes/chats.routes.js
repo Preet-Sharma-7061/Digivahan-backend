@@ -12,7 +12,7 @@ const {
   SendUserMessage,
   getallChatDetails,
 } = require("../controllers/chatController.js");
-
+    
 
 router.post(
   API_ROUTES.CHAT.SEND_MESSAGE,

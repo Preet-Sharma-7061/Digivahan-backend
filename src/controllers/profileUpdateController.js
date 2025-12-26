@@ -63,6 +63,10 @@ const UpdateUserDetails = async (req, res) => {
     if (age !== undefined) user.public_details.age = age;
     if (gender) user.public_details.gender = gender;
 
+    // 🟢 6️⃣ Recalculate profile completion %
+    user.basic_details.profile_completion_percent =
+      calculateProfileCompletion(user);
+
     // ===== 6️⃣ Save user first =====
     await user.save();
 
@@ -207,6 +211,43 @@ const getUserDetails = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// Profile Updation Process
+const PROFILE_FIELDS = {
+  basic_details: [
+    "profile_pic",
+    "first_name",
+    "last_name",
+    "phone_number",
+    "email",
+    "occupation",
+  ],
+  public_details: ["public_pic", "nick_name", "address", "age", "gender"],
+};
+
+const TOTAL_FIELDS = PROFILE_FIELDS.basic_details.length + PROFILE_FIELDS.public_details.length;
+const PER_FIELD_PERCENT = Math.floor(100 / TOTAL_FIELDS);
+
+// Calculator profile percentage function
+const calculateProfileCompletion = (user) => {
+  let completed = 0;
+
+  PROFILE_FIELDS.basic_details.forEach((field) => {
+    const val = user.basic_details?.[field];
+    if (val !== undefined && val !== null && val !== "" && val !== 0) {
+      completed++;
+    }
+  });
+
+  PROFILE_FIELDS.public_details.forEach((field) => {
+    const val = user.public_details?.[field];
+    if (val !== undefined && val !== null && val !== "" && val !== 0) {
+      completed++;
+    }
+  });
+
+  return Math.min(completed * PER_FIELD_PERCENT, 100);
 };
 
 module.exports = { UpdateUserDetails, getUserDetails };

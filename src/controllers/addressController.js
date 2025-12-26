@@ -120,10 +120,6 @@ const UpdateUserAddress = async (req, res) => {
     // 5️⃣ Set current address as default
     address.default_status = true;
 
-    // 🟢 6️⃣ Recalculate profile completion %
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
-
     // 7️⃣ Save once
     await user.save();
 
@@ -196,44 +192,6 @@ const DeleteUserAddress = async (req, res) => {
   }
 };
 
-// Profile fields define
 
-const PROFILE_FIELDS = {
-  basic_details: [
-    "profile_pic",
-    "first_name",
-    "last_name",
-    "phone_number",
-    "email",
-    "occupation",
-  ],
-  public_details: ["public_pic", "nick_name", "address", "age", "gender"],
-};
-
-const TOTAL_FIELDS =
-  PROFILE_FIELDS.basic_details.length + PROFILE_FIELDS.public_details.length;
-
-const PER_FIELD_PERCENT = Math.floor(100 / TOTAL_FIELDS);
-
-// Calculator profile percentage function
-const calculateProfileCompletion = (user) => {
-  let completed = 0;
-
-  PROFILE_FIELDS.basic_details.forEach((field) => {
-    const val = user.basic_details?.[field];
-    if (val !== undefined && val !== null && val !== "" && val !== 0) {
-      completed++;
-    }
-  });
-
-  PROFILE_FIELDS.public_details.forEach((field) => {
-    const val = user.public_details?.[field];
-    if (val !== undefined && val !== null && val !== "" && val !== 0) {
-      completed++;
-    }
-  });
-
-  return Math.min(completed * PER_FIELD_PERCENT, 100);
-};
 
 module.exports = { UserAddAddress, UpdateUserAddress, DeleteUserAddress };

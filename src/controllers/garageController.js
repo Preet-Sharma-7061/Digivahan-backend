@@ -128,32 +128,32 @@ const addVehicle = async (req, res) => {
 
     // ------------------ SAVE INSIDE VehicleInfoData (ONLY IF NOT EXISTS) ------------------
     if (!findInVehicleInfo) {
+      // ------------------ SAVE INSIDE VehicleInfoData GARAGE ------------------
       vehicleInfoDoc.vehicles.push({
         vehicle_id: vehicle_number,
         api_data: vehicleData,
       });
+
       await vehicleInfoDoc.save();
-      console.log("✔ Vehicle saved inside VehicleInfoData");
-    } else {
-      console.log("⚠ Vehicle exists inside VehicleInfoData. Skipping save.");
+
+      // ------------------ SAVE INSIDE USER GARAGE ------------------
+      user.garage.vehicles.push({
+        vehicle_id: vehicle_number,
+        api_data: vehicleData,
+      });
+
+      await user.save();
+      
+      return res.status(200).json({
+        status: true,
+        message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
+        data: {
+          result: rtoData,
+          data_source: dataSource,
+        },
+      });
     }
 
-    // ------------------ SAVE INSIDE USER GARAGE ------------------
-    user.garage.vehicles.push({
-      vehicle_id: vehicle_number,
-      api_data: vehicleData,
-    });
-
-    await user.save();
-
-    return res.status(200).json({
-      status: true,
-      message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
-      data: {
-        result: rtoData,
-        data_source: dataSource,
-      },
-    });
   } catch (error) {
     console.error("Add vehicle error:", error);
     return res.status(500).json({
@@ -241,7 +241,6 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
  * Transform RTO data to our vehicle schema format
  */
 const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
-  console.log("click");
 
   // Helper function to safely parse dates
   const parseDate = (dateInput) => {
