@@ -121,7 +121,7 @@ const getallChatDetails = async (req, res) => {
     return res.status(200).json({
       status: true,
       totalMessages: chats.length,
-      members:room.members,
+      members: room.members,
       data: chats,
     });
   } catch (error) {

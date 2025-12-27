@@ -76,6 +76,7 @@ const CompareVehicle = async (req, res) => {
   }
 };
 
+
 const CompareVehicleUpdate = async (req, res) => {
   try {
     const { compare_id, car_id, update_car_id } = req.body;
@@ -151,8 +152,7 @@ const CompareVehicleUpdate = async (req, res) => {
 const getAllvehicleCompairesionList = async (req, res) => {
   try {
     // 🔍 find all comparisons (latest first)
-    const comparisons = await VehicleComparison.find()
-      .sort({ createdAt: -1 });
+    const comparisons = await VehicleComparison.find().sort({ createdAt: -1 });
 
     // ❗ no data case
     if (!comparisons || comparisons.length === 0) {
@@ -179,5 +179,8 @@ const getAllvehicleCompairesionList = async (req, res) => {
   }
 };
 
-
-module.exports = { CompareVehicle, CompareVehicleUpdate, getAllvehicleCompairesionList };
+module.exports = {
+  CompareVehicle,
+  CompareVehicleUpdate,
+  getAllvehicleCompairesionList,
+};

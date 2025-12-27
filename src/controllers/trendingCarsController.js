@@ -36,7 +36,7 @@ const addTrendingCar = async (req, res) => {
 
 const fetchcardDetails = async (req, res) => {
   try {
-    const cars = await TrendingCars.find({}).sort({ createdAt: -1 }); // latest first (optional)
+    const cars = await TrendingCars.aggregate([{ $sample: { size: 4 } }])
 
     return res.status(200).json({
       status: true,
@@ -122,4 +122,9 @@ const DeleteCarDetails = async (req, res) => {
   }
 };
 
-module.exports = { addTrendingCar, fetchcardDetails, getCarDetails, DeleteCarDetails };
+module.exports = {
+  addTrendingCar,
+  fetchcardDetails,
+  getCarDetails,
+  DeleteCarDetails,
+};

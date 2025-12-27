@@ -226,9 +226,9 @@ const notificationSchema = new mongoose.Schema(
       default: true,
     },
 
-    default_status: {
+    seen_status: {
       type: Boolean,
-      default: false,
+      default: true,
     },
   },
   {

@@ -18,6 +18,7 @@ const sendNotification = async (req, res) => {
       longitude,
       incident_proof,
       inapp_notification,
+      seen_status
     } = req.body;
 
     // 1️⃣ Find sender
@@ -72,6 +73,7 @@ const sendNotification = async (req, res) => {
       longitude,
       incident_proof: incidentProofArray,
       inapp_notification,
+      seen_status
     });
 
     await receiver.save();
@@ -204,7 +206,7 @@ const getAllNotification = async (req, res) => {
 
     // 🔔 unseen notifications count
     const unseenCount = notifications.filter(
-      (n) => n.default_status === false
+      (n) => n.seen_status === true
     ).length;
 
     // ⏰ latest notifications on top
@@ -274,7 +276,7 @@ const seenNotificationByUser = async (req, res) => {
     }
 
     // ✅ mark as seen
-    notification.default_status = true;
+    notification.seen_status = false;
 
     // 💾 save user document
     await user.save();
