@@ -226,7 +226,8 @@ const PROFILE_FIELDS = {
   public_details: ["public_pic", "nick_name", "address", "age", "gender"],
 };
 
-const TOTAL_FIELDS = PROFILE_FIELDS.basic_details.length + PROFILE_FIELDS.public_details.length;
+const TOTAL_FIELDS =
+  PROFILE_FIELDS.basic_details.length + PROFILE_FIELDS.public_details.length;
 const PER_FIELD_PERCENT = Math.floor(100 / TOTAL_FIELDS);
 
 // Calculator profile percentage function
@@ -246,6 +247,11 @@ const calculateProfileCompletion = (user) => {
       completed++;
     }
   });
+
+  // 🔥 IMPORTANT FIX
+  if (completed === TOTAL_FIELDS) {
+    return 100;
+  }
 
   return Math.min(completed * PER_FIELD_PERCENT, 100);
 };
