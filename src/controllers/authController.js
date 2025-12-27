@@ -441,6 +441,7 @@ const signIn = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
+        public_pic: user.public_details?.public_pic
       },
     };
 
@@ -909,6 +910,7 @@ const verifyLoginOtp = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
+        public_pic:user.public_details?.public_pic || "",
       },
       live_tracking: {
         is_tracking_on: user.live_tracking?.is_tracking_on || false,
