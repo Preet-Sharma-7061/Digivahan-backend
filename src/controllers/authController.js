@@ -1041,7 +1041,7 @@ const requestResetPassword = async (req, res) => {
       message: "OTP sent successfully",
       otp_valid_till: validUntil.toISOString(),
       attempts_left: attemptsLeft,
-      verify_otp_url: "auth/verify-reset-otp",
+      verify_otp_url: "/auth/verify-reset-otp-change-password",
     });
   } catch (error) {
     console.error("Request reset password error:", error);
