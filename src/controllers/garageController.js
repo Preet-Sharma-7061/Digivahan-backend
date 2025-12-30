@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
-const RTOVehiclesStorage = require("../models/rtoVehicleStroageSchema");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
 const axios = require("axios");
 const { SUCCESS_MESSAGES, ERROR_MESSAGES } = require("../../constants");
@@ -47,39 +46,33 @@ const addVehicle = async (req, res) => {
     }
 
     // ------------------ STEP 1: CHECK USER GARAGE ------------------
-    const findInGarage = user.garage.vehicles.find(
-      (v) =>
-        v.api_data?.vehicle_info?.vehicle_number === vehicle_number ||
-        v.vehicle_id === vehicle_number
+    const alreadyInGarage = user.garage.vehicles.find(
+      (v) => v.vehicle_id === vehicle_number
     );
 
-    if (findInGarage) {
+    if (alreadyInGarage) {
       return res.status(400).json({
         status: false,
-        message: ERROR_MESSAGES.VEHICLE_ALREADY_EXISTS,
+        message: "Vehicle already exists in user garage",
       });
     }
 
-    // ------------------ STEP 2: CHECK VehicleInfoData GLOBAL CACHE ------------------
+    // ------------------ STEP 2: CHECK VehicleInfoData ------------------
     let vehicleInfoDoc = await VehicleInfoData.findOne();
+
     if (!vehicleInfoDoc) {
       vehicleInfoDoc = new VehicleInfoData({ vehicles: [] });
     }
 
-    const findInVehicleInfo = vehicleInfoDoc.vehicles.find(
+    const cachedVehicle = vehicleInfoDoc.vehicles.find(
       (v) => v.vehicle_id === vehicle_number
     );
 
-    let rtoData;
-    let dataSource = "cache";
-
-    if (findInVehicleInfo) {
-      console.log("✔ Vehicle fetched from VehicleInfoData");
-
-      // 🟢 Directly push existing data to user's garage
+    // ✅ Vehicle found in VehicleInfoData (NO API CALL)
+    if (cachedVehicle) {
       user.garage.vehicles.push({
         vehicle_id: vehicle_number,
-        api_data: findInVehicleInfo.api_data,
+        api_data: cachedVehicle.api_data,
       });
 
       await user.save();
@@ -88,72 +81,55 @@ const addVehicle = async (req, res) => {
         status: true,
         message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
         data: {
-          result: findInVehicleInfo.api_data.rto_data,
+          result: cachedVehicle.api_data.rto_data,
           data_source: "vehicle_info_cache",
         },
       });
-    } else {
-      // ------------------ STEP 3: CHECK RTOVehiclesStorage (your old CACHE) ------------------
-      const cachedVehicle = await RTOVehiclesStorage.findByVehicleNumber(
-        vehicle_number
-      );
-
-      if (cachedVehicle) {
-        rtoData = cachedVehicle.rto_data;
-        await cachedVehicle.updateLastUsed();
-        console.log("✔ Vehicle fetched from RTOVehiclesStorage");
-      } else {
-        // ------------------ STEP 4: CALL RTO API (if not found anywhere) ------------------
-        dataSource = "rto_api";
-        try {
-          rtoData = await fetchVehicleDataFromRTO(vehicle_number);
-
-          await RTOVehiclesStorage.saveVehicleData(vehicle_number, rtoData);
-
-          console.log("✔ Vehicle fetched from RTO API");
-        } catch (err) {
-          return res.status(404).json({
-            status: false,
-            message: err.message || ERROR_MESSAGES.RTO_API_FAILED,
-          });
-        }
-      }
     }
 
-    // ------------------ TRANSFORM TO VEHICLE SCHEMA ------------------
+    // ------------------ STEP 3: FETCH FROM RTO API ------------------
+    let rtoData;
+    try {
+      rtoData = await fetchVehicleDataFromRTO(vehicle_number);
+      console.log("Fetch From RTO API");
+
+    } catch (err) {
+      return res.status(404).json({
+        status: false,
+        message: err.message || ERROR_MESSAGES.RTO_API_FAILED,
+      });
+    }
+
+    // ------------------ STEP 4: TRANSFORM DATA ------------------
     const vehicleData = transformRTODataToVehicleSchema(
       rtoData,
       vehicle_number
     );
 
-    // ------------------ SAVE INSIDE VehicleInfoData (ONLY IF NOT EXISTS) ------------------
-    if (!findInVehicleInfo) {
-      // ------------------ SAVE INSIDE VehicleInfoData GARAGE ------------------
-      vehicleInfoDoc.vehicles.push({
-        vehicle_id: vehicle_number,
-        api_data: vehicleData,
-      });
+    // ------------------ STEP 5: SAVE IN VehicleInfoData ------------------
+    vehicleInfoDoc.vehicles.push({
+      vehicle_id: vehicle_number,
+      api_data: vehicleData,
+    });
 
-      await vehicleInfoDoc.save();
+    await vehicleInfoDoc.save();
 
-      // ------------------ SAVE INSIDE USER GARAGE ------------------
-      user.garage.vehicles.push({
-        vehicle_id: vehicle_number,
-        api_data: vehicleData,
-      });
+    // ------------------ STEP 6: SAVE IN USER GARAGE ------------------
+    user.garage.vehicles.push({
+      vehicle_id: vehicle_number,
+      api_data: vehicleData,
+    });
 
-      await user.save();
-      
-      return res.status(200).json({
-        status: true,
-        message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
-        data: {
-          result: rtoData,
-          data_source: dataSource,
-        },
-      });
-    }
+    await user.save();
 
+    return res.status(200).json({
+      status: true,
+      message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
+      data: {
+        result: rtoData,
+        data_source: "rto_api",
+      },
+    });
   } catch (error) {
     console.error("Add vehicle error:", error);
     return res.status(500).json({
@@ -241,7 +217,6 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
  * Transform RTO data to our vehicle schema format
  */
 const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
-
   // Helper function to safely parse dates
   const parseDate = (dateInput) => {
     // If already a Date object and valid, return it

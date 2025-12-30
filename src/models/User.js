@@ -269,8 +269,11 @@ const userSchema = new mongoose.Schema({
     previous_password2: { type: String, default: "" },
     previous_password3: { type: String, default: "" },
   },
-  live_tracking: {
-    is_tracking_on: { type: Boolean, default: false },
+  is_tracking_on: { type: Boolean, default: false },
+  
+  is_notification_sound_on: {
+    type: Boolean,
+    default: true,
   },
   notifications: [notificationSchema],
   my_orders: [userMyOrderSchema],

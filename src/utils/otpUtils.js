@@ -41,7 +41,9 @@ const generateVerificationId = () => {
  * @param {string} templateType - Type of OTP (signup, login, reset)
  * @returns {Promise<boolean>} - Success status
  */
-const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
+const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
+  console.log(templateType);
+  
   try {
     // PRP SMS API configuration
     const prpSmsConfig = {
@@ -52,8 +54,8 @@ const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
       sender: process.env.PRP_SMS_SENDER || "DGVAHN",
       templates: {
         signup: process.env.PRP_SMS_SIGNUP_TEMPLATE_NAME || "SignUp_OTP",
-        login: process.env.PRP_SMS_LOGIN_TEMPLATE_NAME || "Login_OTP",
-        reset: process.env.PRP_SMS_RESET_TEMPLATE_NAME || "ResetPassword_OTP",
+        login: process.env.PRP_SMS_LOGIN_TEMPLATE_NAME || "SignIn_OTP",
+        reset: process.env.PRP_SMS_RESET_TEMPLATE_NAME || "Reset_Password_OTP",
         verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
       },
     };
@@ -202,11 +204,9 @@ const sendOTPViaEmail = async (email, otp, templateType = "signup") => {
  * @returns {Promise<boolean>} - Success status
  */
 const sendOTP = async (contact, otp, channel, templateType = "signup") => {
-  console.log(contact, otp, channel);
-
   try {
     if (channel === OTP_CHANNEL.PHONE) {
-      return await sendOTPViaSMS(contact, otp);
+      return await sendOTPViaSMS(contact, otp, templateType);
     } else if (channel === OTP_CHANNEL.EMAIL) {
       return await sendOTPViaEmail(contact, otp, templateType);
     } else {

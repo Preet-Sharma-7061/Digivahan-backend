@@ -239,9 +239,8 @@ const verifyOtp = async (req, res) => {
         previous_password3: "",
         previous_password4: "",
       },
-      live_tracking: {
-        is_tracking_on: true,
-      },
+      is_tracking_on: true,
+      is_notification_sound_on: false,
       garage: {
         vehicles: [], // 🔥 VERY IMPORTANT
       },
@@ -273,7 +272,15 @@ const verifyOtp = async (req, res) => {
         profile_completion_percent:
           newUser.basic_details.profile_completion_percent,
       },
-      live_tracking: newUser.live_tracking,
+      public_details: {
+        nick_name: newUser.public_details.nick_name,
+        address: newUser.public_details.address,
+        age: newUser.public_details.age,
+        gender: newUser.public_details.gender,
+        public_pic: newUser.public_details.public_pic,
+      },
+      is_tracking_on: newUser.is_tracking_on,
+      is_notification_sound_on: newUser.is_notification_sound_on,
       token: token,
     };
 
@@ -441,15 +448,17 @@ const signIn = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
-        public_pic: user.public_details?.public_pic
+        public_pic: user.public_details?.public_pic,
       },
+      is_tracking_on: user.is_tracking_on || false,
+      is_notification_sound_on: user.is_notification_sound_on || true,
+      token: token,
     };
 
     res.status(200).json({
       status: true,
       message: "Login successful",
       user: userResponse,
-      token: token,
     });
   } catch (error) {
     console.error("Sign in error:", error);
@@ -910,11 +919,10 @@ const verifyLoginOtp = async (req, res) => {
         address: user.public_details?.address || "",
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
-        public_pic:user.public_details?.public_pic || "",
+        public_pic: user.public_details?.public_pic || "",
       },
-      live_tracking: {
-        is_tracking_on: user.live_tracking?.is_tracking_on || false,
-      },
+      is_tracking_on: user.is_tracking_on || false,
+      is_notification_sound_on: user.is_notification_sound_on || true,
       token: token,
     };
 
@@ -1195,23 +1203,15 @@ const verifyResetOtp = async (req, res) => {
         age: user.public_details?.age || 0,
         gender: user.public_details?.gender || "",
       },
-      live_tracking: {
-        is_tracking_on: user.live_tracking?.is_tracking_on || false,
-      },
-      address_book: user.address_book || [],
-      chat_box: user.chat_box || [],
-      emergency_contacts: user.emergency_contacts || [],
-      garage: {
-        security_code: user.garage?.security_code || "",
-        vehicles: user.garage?.vehicles || [],
-      },
+      is_tracking_on: user.is_tracking_on || false,
+      is_notification_sound_on: user.is_notification_sound_on || true,
+      token: token,
     };
 
     res.status(200).json({
       status: true,
       message: ERROR_MESSAGES.PASSWORD_RESET_SUCCESS,
       login: true,
-      token: token,
       user: userResponse,
     });
   } catch (error) {
