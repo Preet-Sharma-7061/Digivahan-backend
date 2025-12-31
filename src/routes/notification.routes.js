@@ -14,6 +14,7 @@ const {
   checkSecurityCode,
   verifySecurityCode,
   seenNotificationByUser,
+  isOnnotification
 } = require("../controllers/notificationController.js");
 
 router.post(
@@ -58,6 +59,10 @@ router.post(
   verifySecurityCode
 );
 
-
+router.post(
+  API_ROUTES.NOTIFICATION.IS_ON_NOTIFICATION,
+  [commonValidations.userId("user_id"), handleValidationErrors],
+  isOnnotification
+);
 
 module.exports = router;

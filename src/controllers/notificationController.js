@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const axios = require("axios");
+const mongoose = require("mongoose");
 
 const sendNotification = async (req, res) => {
   try {
@@ -18,7 +19,7 @@ const sendNotification = async (req, res) => {
       longitude,
       incident_proof,
       inapp_notification,
-      seen_status
+      seen_status,
     } = req.body;
 
     // 1️⃣ Find sender
@@ -73,7 +74,7 @@ const sendNotification = async (req, res) => {
       longitude,
       incident_proof: incidentProofArray,
       inapp_notification,
-      seen_status
+      seen_status,
     });
 
     await receiver.save();
@@ -92,10 +93,15 @@ const sendNotification = async (req, res) => {
       accident_alert: "99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
     };
 
-    const DEFAULT_ANDROID_CHANNEL = "54dcadaf-229d-4f03-8574-e9b1f4060279";
+    const DEFAULT_ANDROID_CHANNEL = "328b98de-49cc-47b2-85b4-733547c953d4";
 
-    const androidChannelId =
-      ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
+    // 🔥 FINAL CHANNEL DECISION
+    let androidChannelId = DEFAULT_ANDROID_CHANNEL;
+
+    if (receiver.is_notification_sound_on === true) {
+      androidChannelId =
+        ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
+    }
 
     // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
     if (receiver._id) {
@@ -206,7 +212,7 @@ const getAllNotification = async (req, res) => {
 
     // 🔔 unseen notifications count
     const unseenCount = notifications.filter(
-      (n) => n.seen_status === true
+      (n) => n.seen_status === false
     ).length;
 
     // ⏰ latest notifications on top
@@ -276,7 +282,7 @@ const seenNotificationByUser = async (req, res) => {
     }
 
     // ✅ mark as seen
-    notification.seen_status = false;
+    notification.seen_status = true;
 
     // 💾 save user document
     await user.save();
@@ -431,10 +437,70 @@ const verifySecurityCode = async (req, res) => {
   }
 };
 
+const isOnnotification = async (req, res) => {
+  try {
+    console.log("click");
+
+    const { user_id, is_notification_on } = req.body;
+
+    // ------------------ VALIDATION ------------------
+    if (typeof is_notification_on !== "boolean") {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid parameters",
+      });
+    }
+
+    // ------------------ FIND USER ------------------
+    let user;
+
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      user = await User.findById(user_id);
+    } else if (user_id.includes("@")) {
+      user = await User.findOne({
+        "basic_details.email": user_id.toLowerCase(),
+      });
+    } else {
+      user = await User.findOne({
+        "basic_details.phone_number": String(user_id),
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    // ------------------ UPDATE BOOLEAN ------------------
+    user.is_notification_sound_on = is_notification_on;
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: `Notification ${
+        is_notification_on ? "enabled" : "disabled"
+      } successfully`,
+      data: {
+        is_notification_on: user.is_notification_sound_on,
+      },
+    });
+  } catch (error) {
+    console.error("Notification toggle error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   sendNotification,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
   seenNotificationByUser,
+  isOnnotification,
 };

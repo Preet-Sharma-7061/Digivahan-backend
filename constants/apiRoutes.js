@@ -306,6 +306,7 @@ const API_ROUTES = {
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
     VERIFY_SECURITY_CODE: "/verify/security-code",
+    IS_ON_NOTIFICATION:"/user/on-notification",
     UNREAD_COUNT: "/:user_id/unread-count",
     CLEANUP: "/cleanup-expired-guests",
   },
