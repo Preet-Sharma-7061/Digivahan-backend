@@ -8,6 +8,7 @@ const {
 
 const {
   addVehicle,
+  addVehicleInUsergarage,
   getGarage,
   removeVehicle,
 } = require("../controllers/garageController.js");
@@ -18,11 +19,19 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 router.post(
   API_ROUTES.GARAGE.ADD_VEHICLE,
   [
-    commonValidations.userId("user_id"),
     handleValidationErrors,
   ],
   addVehicle
 );
+
+router.post(
+  API_ROUTES.GARAGE.ADD_USER_GARAGE,
+  [
+    commonValidations.userId("user_id"),
+    handleValidationErrors,
+  ],
+  addVehicleInUsergarage
+)
 
 // Get User's Garage - Get all vehicles in user's garage
 router.get(

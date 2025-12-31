@@ -132,7 +132,8 @@ const API_ROUTES = {
   // Garage routes
   GARAGE: {
     BASE: "/api",
-    ADD_VEHICLE: "/v1/garage/add-vehicle",
+    ADD_VEHICLE: "/v1/add-vehicle",
+    ADD_USER_GARAGE: "/v1/user/add-garage",
     GET_GARAGE: "/v1/garage/:user_id",
     REMOVE_VEHICLE: "/v1/garage/remove-vehicle",
   },
@@ -306,7 +307,7 @@ const API_ROUTES = {
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
     VERIFY_SECURITY_CODE: "/verify/security-code",
-    IS_ON_NOTIFICATION:"/user/on-notification",
+    IS_ON_NOTIFICATION: "/user/on-notification",
     UNREAD_COUNT: "/:user_id/unread-count",
     CLEANUP: "/cleanup-expired-guests",
   },

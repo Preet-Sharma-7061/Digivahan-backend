@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload } = require("../middleware/cloudinary");
+const { bypassupload } = require("../middleware/bypassCloudinary");
 
 const {
   uploadNotificationImage,
@@ -10,7 +10,7 @@ const {
 // Upload image
 router.post(
   "/api/v1/notification/image",
-  upload.single("image"),
+  bypassupload.single("image"),
   uploadNotificationImage
 );
 

@@ -1,4 +1,5 @@
-const cloudinary = require("cloudinary").v2;
+const { cloudinary } = require("../middleware/bypassCloudinary");
+const streamifier = require("streamifier");
 
 exports.uploadNotificationImage = async (req, res) => {
   try {
@@ -18,10 +19,20 @@ exports.uploadNotificationImage = async (req, res) => {
       });
     }
 
-    // upload to dynamic folder
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-      folder: `notification_file/${folder_name}`,
-      resource_type: "image",
+    // ✅ Upload buffer to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: `notification_file/${folder_name}`,
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+
+      streamifier.createReadStream(req.file.buffer).pipe(stream);
     });
 
     return res.json({
@@ -41,6 +52,7 @@ exports.uploadNotificationImage = async (req, res) => {
     });
   }
 };
+
 
 exports.deleteNotificationImage = async (req, res) => {
     try {

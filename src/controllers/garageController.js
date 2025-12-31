@@ -3,6 +3,11 @@ const User = require("../models/User");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
 const axios = require("axios");
 const { SUCCESS_MESSAGES, ERROR_MESSAGES } = require("../../constants");
+const {
+  maskName,
+  maskVehicleNumber,
+  maskAlphaNumeric,
+} = require("../utils/maskData");
 
 /**
  * Add Vehicle to Garage - Fetch vehicle data from RTO and save to user's garage
@@ -10,9 +15,138 @@ const { SUCCESS_MESSAGES, ERROR_MESSAGES } = require("../../constants");
  */
 const addVehicle = async (req, res) => {
   try {
-    const { user_id, vehicle_number } = req.body;
+    const { vehicle_number } = req.body;
 
-    if (!user_id || !vehicle_number) {
+    if (!vehicle_number) {
+      return res.status(400).json({
+        status: false,
+        message: ERROR_MESSAGES.INVALID_PARAMETER,
+      });
+    }
+
+    let vehicleInfoDoc = await VehicleInfoData.findOne();
+
+    if (!vehicleInfoDoc) {
+      vehicleInfoDoc = new VehicleInfoData({ vehicles: [] });
+    }
+
+    const cachedVehicle = vehicleInfoDoc.vehicles.find(
+      (v) => v.vehicle_id === vehicle_number
+    );
+
+    // ✅ CASE 1: CACHE HIT
+    if (cachedVehicle) {
+      return res.status(200).json({
+        status: true,
+        message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
+        data: {
+          result: maskVehicleResponse(cachedVehicle.api_data),
+          data_source: "vehicle_info_cache",
+        },
+      });
+    }
+
+    // ❌ CASE 2: FETCH FROM RTO
+    let rtoData;
+    try {
+      rtoData = await fetchVehicleDataFromRTO(vehicle_number);
+    } catch (err) {
+      return res.status(404).json({
+        status: false,
+        message: err.message || ERROR_MESSAGES.RTO_API_FAILED,
+      });
+    }
+
+    const vehicleData = transformRTODataToVehicleSchema(
+      rtoData,
+      vehicle_number
+    );
+
+    vehicleInfoDoc.vehicles.push({
+      vehicle_id: vehicle_number,
+      api_data: vehicleData,
+    });
+
+    await vehicleInfoDoc.save();
+
+    return res.status(200).json({
+      status: true,
+      message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
+      data: {
+        result: maskVehicleResponse(vehicleData),
+        data_source: "rto_api",
+      },
+    });
+  } catch (error) {
+    console.error("Add vehicle error:", error);
+    return res.status(500).json({
+      status: false,
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+const maskVehicleResponse = (data) => {
+  if (!data) return data;
+
+  return {
+    ...data,
+
+    custom_vehicle_info: {
+      ...data.custom_vehicle_info,
+      owner_name: maskName(data.custom_vehicle_info.owner_name),
+      vehicle_number: maskVehicleNumber(
+        data.custom_vehicle_info.vehicle_number
+      ),
+      engine: maskAlphaNumeric(data.custom_vehicle_info.engine),
+      chassis_number: maskAlphaNumeric(data.custom_vehicle_info.chassis_number),
+      insurance_policy_number: maskAlphaNumeric(
+        data.custom_vehicle_info.insurance_policy_number
+      ),
+    },
+
+    rto_data: {
+      ...data.rto_data,
+
+      registration: {
+        ...data.rto_data.registration,
+        number: maskVehicleNumber(data.rto_data.registration.number),
+        owner: {
+          ...data.rto_data.registration.owner,
+          name: maskName(data.rto_data.registration.owner.name),
+          fatherName: maskName(data.rto_data.registration.owner.fatherName),
+          presentAddress: "******",
+          permanentAddress: "******",
+        },
+      },
+
+      vehicle: {
+        ...data.rto_data.vehicle,
+        engine: maskAlphaNumeric(data.rto_data.vehicle.engine),
+        chassis: maskAlphaNumeric(data.rto_data.vehicle.chassis),
+      },
+
+      insurance: {
+        ...data.rto_data.insurance,
+        policyNumber: maskAlphaNumeric(data.rto_data.insurance.policyNumber),
+      },
+
+      pollutionControl: {
+        ...data.rto_data.pollutionControl,
+        certificateNumber: maskAlphaNumeric(
+          data.rto_data.pollutionControl.certificateNumber
+        ),
+      },
+    },
+  };
+};
+
+const addVehicleInUsergarage = async (req, res) => {
+  try {
+    const { user_id, vehicle_number, owner_name } = req.body;
+
+    // ------------------ VALIDATION ------------------
+    if (!vehicle_number || !owner_name) {
       return res.status(400).json({
         status: false,
         message: ERROR_MESSAGES.INVALID_PARAMETER,
@@ -20,19 +154,7 @@ const addVehicle = async (req, res) => {
     }
 
     // ------------------ FIND USER ------------------
-    let user;
-
-    if (mongoose.Types.ObjectId.isValid(user_id)) {
-      user = await User.findById(user_id);
-    } else if (user_id.includes("@")) {
-      user = await User.findOne({
-        "basic_details.email": user_id.toLowerCase(),
-      });
-    } else {
-      user = await User.findOne({
-        "basic_details.phone_number": String(user_id),
-      });
-    }
+    const user = await User.findById(user_id);
 
     if (!user) {
       return res.status(404).json({
@@ -45,93 +167,62 @@ const addVehicle = async (req, res) => {
       user.garage = { security_code: "", vehicles: [] };
     }
 
-    // ------------------ STEP 1: CHECK USER GARAGE ------------------
-    const alreadyInGarage = user.garage.vehicles.find(
+    // ------------------ DUPLICATE CHECK IN USER GARAGE ------------------
+    const alreadyExists = user.garage.vehicles.find(
       (v) => v.vehicle_id === vehicle_number
     );
 
-    if (alreadyInGarage) {
+    if (alreadyExists) {
       return res.status(400).json({
         status: false,
         message: "Vehicle already exists in user garage",
       });
     }
 
-    // ------------------ STEP 2: CHECK VehicleInfoData ------------------
-    let vehicleInfoDoc = await VehicleInfoData.findOne();
+    // ------------------ FIND IN VehicleInfoData ------------------
+    const vehicleInfoDoc = await VehicleInfoData.findOne();
 
     if (!vehicleInfoDoc) {
-      vehicleInfoDoc = new VehicleInfoData({ vehicles: [] });
-    }
-
-    const cachedVehicle = vehicleInfoDoc.vehicles.find(
-      (v) => v.vehicle_id === vehicle_number
-    );
-
-    // ✅ Vehicle found in VehicleInfoData (NO API CALL)
-    if (cachedVehicle) {
-      user.garage.vehicles.push({
-        vehicle_id: vehicle_number,
-        api_data: cachedVehicle.api_data,
-      });
-
-      await user.save();
-
-      return res.status(200).json({
-        status: true,
-        message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
-        data: {
-          result: cachedVehicle.api_data.rto_data,
-          data_source: "vehicle_info_cache",
-        },
-      });
-    }
-
-    // ------------------ STEP 3: FETCH FROM RTO API ------------------
-    let rtoData;
-    try {
-      rtoData = await fetchVehicleDataFromRTO(vehicle_number);
-      console.log("Fetch From RTO API");
-
-    } catch (err) {
       return res.status(404).json({
         status: false,
-        message: err.message || ERROR_MESSAGES.RTO_API_FAILED,
+        message: "Vehicle data not found in system",
       });
     }
 
-    // ------------------ STEP 4: TRANSFORM DATA ------------------
-    const vehicleData = transformRTODataToVehicleSchema(
-      rtoData,
-      vehicle_number
+    const matchedVehicle = vehicleInfoDoc.vehicles.find(
+      (v) =>
+        v.vehicle_id === vehicle_number &&
+        v.api_data?.custom_vehicle_info?.owner_name?.toLowerCase().trim() ===
+          owner_name.toLowerCase().trim()
     );
 
-    // ------------------ STEP 5: SAVE IN VehicleInfoData ------------------
-    vehicleInfoDoc.vehicles.push({
-      vehicle_id: vehicle_number,
-      api_data: vehicleData,
-    });
+    console.log(matchedVehicle);
 
-    await vehicleInfoDoc.save();
+    if (!matchedVehicle) {
+      return res.status(404).json({
+        status: false,
+        message: "Vehicle not found or owner name does not match our records",
+      });
+    }
 
-    // ------------------ STEP 6: SAVE IN USER GARAGE ------------------
+    // ------------------ SAVE IN USER GARAGE ------------------
     user.garage.vehicles.push({
       vehicle_id: vehicle_number,
-      api_data: vehicleData,
+      api_data: matchedVehicle.api_data,
     });
 
     await user.save();
 
+    // ------------------ RESPONSE ------------------
     return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
       data: {
-        result: rtoData,
-        data_source: "rto_api",
+        vehicle: matchedVehicle.api_data,
       },
     });
   } catch (error) {
-    console.error("Add vehicle error:", error);
+    console.error("Add vehicle in user garage error:", error);
     return res.status(500).json({
       status: false,
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -449,6 +540,7 @@ const removeVehicle = async (req, res) => {
 
 module.exports = {
   addVehicle,
+  addVehicleInUsergarage,
   getGarage,
   removeVehicle,
 };
