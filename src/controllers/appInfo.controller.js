@@ -190,3 +190,37 @@ exports.updatePrivacyPolicy = async (req, res) => {
   }
 };
 
+exports.getAppInfo = async(req , res)=>{
+ try {
+    const doc = await AppInfo.findOne().lean().exec();
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "No app info found",
+      });
+    }
+
+    const now = new Date();
+
+    const currentTime = now.toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true, // AM/PM
+    });
+
+    return res.json({
+      success: true,
+      data: doc,
+      currentDate: now.toISOString().split("T")[0], // YYYY-MM-DD
+      currentTime, // 👈 "3:25 PM"
+    });
+  } catch (error) {
+    console.error("getAllAppInfo error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+

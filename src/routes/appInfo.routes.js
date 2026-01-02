@@ -10,7 +10,8 @@ const {
   getIOSVersion,
   getPrivacyPolicy,
   getTermsCondition,
-  updateRazorpayKey
+  updateRazorpayKey,
+  getAppInfo
 } = require("../controllers/appInfo.controller");
 
 // GET ANDROID VERSION
@@ -40,27 +41,8 @@ router.post("/api/v1/app-info/terms-condition", updateTermsCondition);
 router.post("/api/v1/app-info/razorpay-key", updateRazorpayKey);
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
-router.get("/api/v1/app-info", async (req, res) => {
-    try {
-      const AppInfo = require("../models/appInfo.model");
-      const doc = await AppInfo.findOne().lean().exec();
-  
-      if (!doc) {
-        return res.status(404).json({
-          success: false,
-          message: "No app info found"
-        });
-      }
-  
-      return res.json({ success: true, data: doc });
-    } catch (error) {
-      console.error("getAllAppInfo error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error"
-      });
-    }
-  });
+router.get("/api/v1/app-info", getAppInfo);
+
   
 
 module.exports = router;

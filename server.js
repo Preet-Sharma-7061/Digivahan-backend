@@ -4,27 +4,23 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 
-// Import routes
-// Hasan Code
-const appInfoRoutes = require("./src/routes/appInfo.routes");
-const fuelRoutes = require('./src/routes/fuel.routes');
-const uploadRoutes = require('./src/routes/upload.routes');
-const deleteImageRoutes = require('./src/routes/deleteImage.routes');
-const razorpayRoutes = require("./src/routes/razorpay.routes");
-const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes");
-const newsRoutes = require("./src/routes/news.routes");
-const tipsTricksRoutes = require("./src/routes/tipsTricks.routes");
-const notificationImageRoutes = require("./src/routes/notificationImage.routes");
-
 // Database and utils
 const connectDB = require("./db_config/index.js");
 const startDeletionCron = require("./src/utils/cronJobs.js");
 
-// Constants
+// Base URL path
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
-
+const appInfoRoutes = require("./src/routes/appInfo.routes.js");
+const fuelRoutes = require('./src/routes/fuel.routes.js');
+const uploadRoutes = require('./src/routes/upload.routes.js');
+const deleteImageRoutes = require('./src/routes/deleteImage.routes.js');
+const razorpayRoutes = require("./src/routes/razorpay.routes.js");
+const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes.js");
+const newsRoutes = require("./src/routes/news.routes.js");
+const tipsTricksRoutes = require("./src/routes/tipsTricks.routes.js");
+const notificationImageRoutes = require("./src/routes/notificationImage.routes.js");
 const authRoutes = require("./src/routes/auth.routes.js");
 const profileDeletation = require("./src/routes/profileDeletation.routes.js");
 const profileUpdateRoutes = require("./src/routes/profileUpdate.routes.js");
@@ -38,14 +34,11 @@ const roomRoutes = require("./src/routes/rooom.routes.js");
 const notificationRoutes = require("./src/routes/notification.routes.js");
 const QRroutes = require("./src/routes/qr.routes.js")
 const chatRoutes = require("./src/routes/chats.routes.js")
-
-// Dashboard Routes
 const trendingCarsRoutes = require("./src/routes/trendingCars.route.js")
 const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js")
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
-
 
 const app = express();
 
@@ -73,7 +66,7 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Hasan Code 
+// Hasan Routes Code 
 app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
@@ -83,7 +76,6 @@ app.use(qrBenefitsRoutes);
 app.use(newsRoutes);
 app.use(tipsTricksRoutes);
 app.use(notificationImageRoutes);
-// Hasan Code End Here
 
 // -------------------- ROUTES --------------------
 
@@ -105,8 +97,12 @@ app.use(API_ROUTES.CHAT.BASE, chatRoutes)
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file
+// app.get("/", (req, res) => {
+//   res.sendFile(path.join(__dirname, "index.html"));
+// });
+
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.status(200).json({message:"Welcome To Digivahan Server"});
 });
 
 // -------------------- SERVER SETUP --------------------

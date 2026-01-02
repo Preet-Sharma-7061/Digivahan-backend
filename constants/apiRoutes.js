@@ -39,6 +39,7 @@ const API_ROUTES = {
     // Password reset routes
     PASSWORD_RESET: {
       CHANGE_PASSWORD: "/change-password",
+      VALIDATE_PASSWORD:"/check/new-password",
       REQUEST: "/request-reset-password",
       VERIFY_OTP: "/verify-reset-otp-change-password",
     },

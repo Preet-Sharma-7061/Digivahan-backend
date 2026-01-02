@@ -32,8 +32,7 @@ const AddEmergencyContact = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    status: true,
-    res.status(500).json({ message: "Internal server error" });
+    status: true, res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -49,7 +48,6 @@ const UpdateUserEmergencyContact = async (req, res) => {
       email,
     } = req.body;
 
-    // 1️⃣ Validate required fields
     if (!user_id || !contact_id) {
       return res.status(400).json({
         status: false,
@@ -57,7 +55,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find user
+    // 1️⃣ Find user
     const user = await User.findById(user_id);
     if (!user) {
       return res.status(404).json({
@@ -66,7 +64,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
       });
     }
 
-    // 3️⃣ Find emergency contact
+    // 2️⃣ Find emergency contact
     const contact = user.emergency_contacts.find((c) =>
       c._id.equals(contact_id)
     );
@@ -80,22 +78,22 @@ const UpdateUserEmergencyContact = async (req, res) => {
 
     const profilePicFile = req.file;
 
-    // 4️⃣ If new profile_pic is uploaded → delete old versions + upload new one
-    if (profilePicFile && contact.public_id) {
-      // 🔥 A) DELETE ALL PREVIOUS VERSIONS OF THIS public_id
-      await cloudinary.api.delete_resources_by_prefix(contact.public_id);
-
-      // 🔥 B) Upload NEW IMAGE with SAME public_id
+    // 3️⃣ PROFILE PIC LOGIC (2 CASES)
+    if (profilePicFile) {
       const buffer = profilePicFile.buffer;
 
+      // 🔹 CASE 1: old image exists → replace it
+      if (contact.public_id) {
+        await cloudinary.uploader.destroy(contact.public_id);
+      }
+
+      // 🔹 CASE 2: old image does NOT exist → fresh upload
       const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
             {
-              public_id: contact.public_id,
-              overwrite: true,
-              invalidate: true,
               folder: "uploads",
+              resource_type: "image",
             },
             (error, result) => {
               if (error) reject(error);
@@ -105,18 +103,19 @@ const UpdateUserEmergencyContact = async (req, res) => {
           .end(buffer);
       });
 
-      // 🔥 C) Update DB
+      // 🔹 Save in both cases
       contact.profile_pic = uploadResult.secure_url;
+      contact.public_id = uploadResult.public_id;
     }
 
-    // 5️⃣ Update editable fields
+    // 4️⃣ Update other fields
     if (first_name) contact.first_name = first_name;
     if (last_name) contact.last_name = last_name;
     if (relation) contact.relation = relation;
     if (phone_number) contact.phone_number = phone_number;
     if (email) contact.email = email;
 
-    // 6️⃣ Save user document
+    // 5️⃣ Save user
     await user.save();
 
     return res.status(200).json({
@@ -125,12 +124,14 @@ const UpdateUserEmergencyContact = async (req, res) => {
       data: contact,
     });
   } catch (error) {
+    console.error("UpdateUserEmergencyContact error:", error);
     return res.status(500).json({
       status: false,
       message: error.message,
     });
   }
 };
+
 
 const DeleteUserEmergencyContact = async (req, res) => {
   try {
@@ -169,7 +170,6 @@ const DeleteUserEmergencyContact = async (req, res) => {
       message: "Emergency contact deleted successfully",
       emergency_contact: user.emergency_contacts,
     });
-
   } catch (error) {
     console.error("DeleteUserEmergencyContact Error:", error);
     return res.status(500).json({ message: "Server error", error });

@@ -674,6 +674,62 @@ const ChangeUserpassword = async (req, res) => {
   }
 };
 
+// Check new password with our database password are already avaliable or not
+const ValidateNewPassword = async (req, res) => {
+  try {
+    const { user_id, new_password } = req.body;
+
+    // 1️⃣ Find user
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.USER_NOT_FOUND,
+      });
+    }
+
+    // 4️⃣ New password should not be same as current
+    const isSamePassword = await user.comparePassword(new_password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        status: false,
+        error_type: "password",
+        message: ERROR_MESSAGES.SAME_PASSWORD,
+      });
+    }
+
+    // 5️⃣ Check against previous passwords
+    const oldPasswords = [
+      user.old_passwords.previous_password1,
+      user.old_passwords.previous_password2,
+      user.old_passwords.previous_password3,
+    ];
+
+    for (const oldPass of oldPasswords) {
+      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
+        return res.status(400).json({
+          status: false,
+          error_type: "password",
+          message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Now You can Change Your password!",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({
+      status: false,
+      error_type: "other",
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 /**
  * OTP Based Login - Send OTP for login
  * POST /api/auth/otp-based-login
@@ -1723,6 +1779,7 @@ module.exports = {
   RequestPrimaryContact,
   VerifyOTPforsetPrimaryContact,
   ChangeUserpassword,
+  ValidateNewPassword,
   LogOutUser,
   suspendUser,
   removeUserSuspension,

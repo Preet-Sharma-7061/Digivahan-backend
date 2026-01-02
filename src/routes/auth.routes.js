@@ -22,6 +22,7 @@ const {
   RequestPrimaryContact,
   VerifyOTPforsetPrimaryContact,
   ChangeUserpassword,
+  ValidateNewPassword,
   LogOutUser,
   suspendUser,
   removeUserSuspension,
@@ -190,6 +191,16 @@ router.post(
   [commonValidations.userId("user_id"), handleValidationErrors],
   ChangeUserpassword
 );
+
+// Validate New password with our old password
+router.post(
+  API_ROUTES.AUTH.PASSWORD_RESET.VALIDATE_PASSWORD,
+  [
+    commonValidations.userId("user_id"),
+    handleValidationErrors
+  ],
+  ValidateNewPassword
+)
 
 router.post(
   API_ROUTES.AUTH.LOGOUT.USER_LOGOUT,
