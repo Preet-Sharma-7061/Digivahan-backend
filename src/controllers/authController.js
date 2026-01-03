@@ -705,7 +705,7 @@ const ValidateNewPassword = async (req, res) => {
       return res.status(400).json({
         status: false,
         error_type: "password",
-        message: ERROR_MESSAGES.SAME_PASSWORD,
+        message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
       });
     }
 
