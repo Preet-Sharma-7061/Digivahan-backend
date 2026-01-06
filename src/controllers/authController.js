@@ -240,7 +240,6 @@ const verifyOtp = async (req, res) => {
         previous_password4: "",
       },
       is_tracking_on: true,
-      is_notification_sound_on: false,
       garage: {
         vehicles: [], // 🔥 VERY IMPORTANT
       },
@@ -682,7 +681,6 @@ const ChangeUserpassword = async (req, res) => {
     });
   }
 };
-
 
 // Check new password with our database password are already avaliable or not
 const ValidateNewPassword = async (req, res) => {
