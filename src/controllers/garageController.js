@@ -199,7 +199,7 @@ const addVehicleInUsergarage = async (req, res) => {
           owner_name.toLowerCase().trim()
     );
 
-    console.log(matchedVehicle);
+    // console.log(matchedVehicle);
 
     if (!matchedVehicle) {
       return res.status(404).json({

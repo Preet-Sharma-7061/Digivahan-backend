@@ -141,9 +141,9 @@ const userMyOrderSchema = new mongoose.Schema(
 const notificationSchema = new mongoose.Schema(
   {
     sender_id: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: "",
+      default: null,
     },
 
     sender_pic: {
