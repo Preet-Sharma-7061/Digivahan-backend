@@ -39,7 +39,7 @@ const API_ROUTES = {
     // Password reset routes
     PASSWORD_RESET: {
       CHANGE_PASSWORD: "/change-password",
-      VALIDATE_PASSWORD:"/check/new-password",
+      VALIDATE_PASSWORD: "/check/new-password",
       REQUEST: "/request-reset-password",
       VERIFY_OTP: "/verify-reset-otp-change-password",
     },
@@ -120,7 +120,7 @@ const API_ROUTES = {
     ASSIGN_QR: "/assign-qr",
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
-    GET_USER_DETAILS:"/user-details/:qr_id"
+    GET_USER_DETAILS: "/user-details/:qr_id",
   },
 
   // Fuel Price routes
@@ -305,6 +305,8 @@ const API_ROUTES = {
   NOTIFICATION: {
     BASE: "/api/notifications",
     SEND: "/send",
+    SEND_NOTIFICATION_FOR_CALL: "/send/call-notification",
+    SEND_SMS_NOTIFICATION: "/send/sms-notification/:user_id",
     GET_USER_NOTIFICATIONS: "/:user_id",
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
@@ -353,14 +355,16 @@ const API_ROUTES = {
   // Order routes
   ORDER: {
     BASE: "/api",
-    CREATE_ORDER: "/orders",
+    USER_CREATE_ORDER: "/user/create-order",
+    ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
     // find from user myorder node
     USER_ORDERS: "/orders-user-list",
     USER_ORDER_DETAILS: "/orders/order-details",
     // find from direct order section
     FETCH_BY_ORDER_ID: "/admin/fetch/order-id",
     FETCH_BY_USER_ID: "/admin/fetch/user-id",
-    CANCEL_ORDER: "/orders/cancel",
+    CANCEL_ORDER_BY_ADMIN: "/orders/admin-cancel",
+    CANCEL_ORDER_BY_USER: "/order/user-cancel",
     CHECK_COURIER: "/check/courier-service",
     // Track Order Status
     TRACK_ORDER_STATUS: "/track-order-status",

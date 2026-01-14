@@ -10,20 +10,35 @@ const {
 
 const {
   sendNotification,
+  sendNotificationForCall,
+  sendSMSNotificationToUser,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
   seenNotificationByUser,
-  isOnnotification
+  isOnnotification,
 } = require("../controllers/notificationController.js");
 
 router.post(
   API_ROUTES.NOTIFICATION.SEND,
+  [commonValidations.receiverId("receiver_id"), handleValidationErrors],
+  sendNotification
+);
+
+router.post(
+  API_ROUTES.NOTIFICATION.SEND_NOTIFICATION_FOR_CALL,
   [
+    commonValidations.senderId("sender_id"),
     commonValidations.receiverId("receiver_id"),
     handleValidationErrors,
   ],
-  sendNotification
+  sendNotificationForCall
+);
+
+router.post(
+  API_ROUTES.NOTIFICATION.SEND_SMS_NOTIFICATION,
+  [handleValidationErrors],
+  sendSMSNotificationToUser
 );
 
 router.get(

@@ -1,13 +1,14 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
+const calculateProfileCompletion = require("../middleware/profileCompletionCalculator")
 
 const AddEmergencyContact = async (req, res) => {
   try {
     const { user_id, first_name, last_name, relation, phone_number, email } =
       req.body;
 
-    if (!user_id || !first_name || !last_name || !phone_number) {
+    if (!user_id || !first_name || !phone_number) {
       return res.status(400).json({
         status: false,
         message: "Required fields are missing",
@@ -23,7 +24,16 @@ const AddEmergencyContact = async (req, res) => {
       });
     }
 
-    // 🔍 CHECK DUPLICATE EMERGENCY CONTACT
+    if (user.basic_details.phone_number === phone_number) {
+      return res.status(404).json({
+        status: false,
+        error_type: "phone_number",
+        message:
+          "This Phone number is already use In User Account Please use another Phone Number",
+      });
+    }
+
+    // 🔍 CHECK DUPLICATE
     const isAlreadyExist = user.emergency_contacts.some((contact) => {
       return (
         contact.phone_number === phone_number &&
@@ -39,13 +49,13 @@ const AddEmergencyContact = async (req, res) => {
       });
     }
 
-    const profilePicFile = req.file;
+    let profile_pic = "";
+    let public_id = "";
 
-    // 3️⃣ PROFILE PIC LOGIC (2 CASES)
-    if (profilePicFile) {
-      const buffer = profilePicFile.buffer;
+    // ✅ OPTIONAL IMAGE LOGIC
+    if (req.file) {
+      const buffer = req.file.buffer;
 
-      // 🔹 CASE 2: old image does NOT exist → fresh upload
       const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
@@ -61,27 +71,34 @@ const AddEmergencyContact = async (req, res) => {
           .end(buffer);
       });
 
-
-      // 🧾 CREATE NEW CONTACT
-      const newContact = {
-        first_name,
-        last_name,
-        relation,
-        phone_number,
-        email,
-        profile_pic: uploadResult.secure_url || "",
-        public_id: uploadResult.public_id || "",
-      };
-
-      user.emergency_contacts.push(newContact);
-      await user.save();
-
-      return res.status(200).json({
-        status: true,
-        message: "Emergency contact added successfully",
-        emergency_contacts: user.emergency_contacts,
-      });
+      profile_pic = uploadResult.secure_url;
+      public_id = uploadResult.public_id;
     }
+
+    // 🧾 CREATE CONTACT (works for both cases)
+    const newContact = {
+      first_name,
+      last_name,
+      relation,
+      phone_number,
+      email,
+      profile_pic,
+      public_id,
+    };
+
+    user.emergency_contacts.push(newContact);
+
+    // 🟢 6️⃣ Recalculate profile completion %
+    user.basic_details.profile_completion_percent =
+      calculateProfileCompletion(user);
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Emergency contact added successfully",
+      emergency_contacts: user.emergency_contacts,
+    });
   } catch (error) {
     console.error("AddEmergencyContact error:", error);
     return res.status(500).json({
@@ -116,6 +133,15 @@ const UpdateUserEmergencyContact = async (req, res) => {
       return res.status(404).json({
         status: false,
         message: "User not found",
+      });
+    }
+
+    if (user.basic_details.phone_number === phone_number) {
+      return res.status(404).json({
+        status: false,
+        error_type: "phone_number",
+        message:
+          "This Phone number is already use In User Account Please use another Phone Number",
       });
     }
 
