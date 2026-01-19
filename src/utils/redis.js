@@ -1,24 +1,10 @@
 const Redis = require("ioredis");
 
-let redis;
+const redis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL)
+  : new Redis({ host: "127.0.0.1", port: 6379 });
 
-if (process.env.REDIS_URL) {
-  // Cloud Redis (Upstash / Render)
-  redis = new Redis(process.env.REDIS_URL);
-} else {
-  // Local Redis
-  redis = new Redis({
-    host: "127.0.0.1",
-    port: 6379,
-  });
-}
-
-redis.on("connect", () => {
-  console.log("Redis connected 🚀");
-});
-
-redis.on("error", (err) => {
-  console.log("Redis error ❌", err);
-});
+redis.on("connect", () => console.log("Redis connected 🚀"));
+redis.on("error", (err) => console.log("Redis error ❌", err));
 
 module.exports = redis;
