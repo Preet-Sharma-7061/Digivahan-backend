@@ -96,9 +96,7 @@ const maskVehicleResponse = (data) => {
     custom_vehicle_info: {
       ...data.custom_vehicle_info,
       owner_name: maskName(data.custom_vehicle_info.owner_name),
-      vehicle_number: maskVehicleNumber(
-        data.custom_vehicle_info.vehicle_number
-      ),
+      vehicle_number: data.custom_vehicle_info.vehicle_number,
       engine: maskAlphaNumeric(data.custom_vehicle_info.engine),
       chassis_number: maskAlphaNumeric(data.custom_vehicle_info.chassis_number),
       insurance_policy_number: maskAlphaNumeric(
@@ -141,7 +139,6 @@ const maskVehicleResponse = (data) => {
     },
   };
 };
-
 
 // Add vehicle in User Garage
 const addVehicleInUsergarage = async (req, res) => {
@@ -541,9 +538,117 @@ const removeVehicle = async (req, res) => {
   }
 };
 
+const RefreshVehicleData = async (req, res) => {
+  try {
+    const { user_id, vehicle_id } = req.body;
+
+    if (!user_id || !vehicle_id) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id and vehicle_id are required",
+      });
+    }
+
+    // 1) Find vehicle in VehicleInfoData
+    const vehicleDataDoc = await VehicleInfoData.findOne({
+      "vehicles.vehicle_id": vehicle_id,
+    });
+
+    if (!vehicleDataDoc) {
+      return res.status(404).json({
+        status: false,
+        message: "Vehicle data not found",
+      });
+    }
+
+    const vehicleData = vehicleDataDoc.vehicles.find(
+      (v) => v.vehicle_id === vehicle_id
+    );
+
+    if (!vehicleData) {
+      return res.status(404).json({
+        status: false,
+        message: "Vehicle data not found",
+      });
+    }
+
+    // 2) Check last_updated (24 hours logic)
+    const lastUpdated = new Date(vehicleData.api_data.last_updated);
+    const now = new Date();
+    const diffInHours = (now - lastUpdated) / (1000 * 60 * 60);
+
+    if (diffInHours < 24) {
+      return res.status(200).json({
+        status: true,
+        message: "Your vehicle data is already up to date",
+        data: vehicleData,
+      });
+    }
+
+    // 3) Fetch fresh data from RTO
+    const rtoData = await fetchVehicleDataFromRTO(vehicle_id);
+
+    // 4) Transform RTO data to your schema format
+    const transformedData = transformRTODataToVehicleSchema(
+      rtoData,
+      vehicle_id
+    );
+
+    // 5) Update VehicleInfoData collection
+    const updatedVehicle = await VehicleInfoData.findOneAndUpdate(
+      { "vehicles.vehicle_id": vehicle_id },
+      {
+        $set: {
+          "vehicles.$.api_data": transformedData,
+          "vehicles.$.last_updated": new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    // 6) Update same vehicle inside User
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    await User.findOneAndUpdate(
+      { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
+      {
+        $set: {
+          "garage.vehicles.$.api_data": transformedData,
+          "garage.vehicles.$.last_updated": new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    const refreshedVehicle = updatedVehicle.vehicles.find(
+      (v) => v.vehicle_id === vehicle_id
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Vehicle data refreshed successfully",
+      data: refreshedVehicle,
+    });
+  } catch (error) {
+    console.error("RefreshVehicleData Error:", error.message);
+    return res.status(500).json({
+      status: false,
+      message: error.message || "Failed to refresh vehicle data",
+    });
+  }
+};
+
 module.exports = {
   addVehicle,
   addVehicleInUsergarage,
+  RefreshVehicleData,
   getGarage,
   removeVehicle,
 };

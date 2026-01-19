@@ -38,7 +38,7 @@ const generateQRTemplate = async (qrImageUrl) => {
     ctx.drawImage(qrImage, QR_X, QR_Y, QR_SIZE, QR_SIZE);
 
     // 4️⃣ Save Final Image
-    const fileName = `qr_template_${Date.now()}.png`;
+    const fileName = `digivahan_qr_${Date.now()}.png`;
     const outputPath = path.join(
       __dirname,
       "../../uploads",
