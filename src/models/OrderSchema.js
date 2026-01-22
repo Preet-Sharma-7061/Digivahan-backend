@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 
 const orderItemSchema = new mongoose.Schema({
   vehicle_id: { type: String, default: "" },
+  makers_model: { type: String, default: "" },
+  makers_name: { type: String, default: "" },
   order_type: { type: String, default: "" },
   name: { type: String, required: true },
   sku: { type: String, default: "QR-001" },
@@ -33,6 +35,7 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
     order_id: { type: String, required: true },
+    courier_company_id: { type: String, required: true },
     order_date: { type: String, required: true },
 
     sub_total: { type: Number, required: true },
@@ -75,7 +78,7 @@ const orderSchema = new mongoose.Schema(
 
     ship_rocket: shiprocketStatusSchema,
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Order", orderSchema);

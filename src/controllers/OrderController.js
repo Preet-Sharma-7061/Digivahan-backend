@@ -24,10 +24,10 @@ const GenerateOrderByUser = async (req, res) => {
     const {
       user_id,
       order_id,
+      courier_company_id,
       sub_total,
       order_value,
       declared_value,
-      is_prepared,
       shipping_is_billing = 1,
       is_return = 0,
 
@@ -56,6 +56,8 @@ const GenerateOrderByUser = async (req, res) => {
 
       // Order Item
       vehicle_id,
+      makers_model,
+      makers_name,
       order_type,
       name,
       sku = "QR-001",
@@ -91,6 +93,7 @@ const GenerateOrderByUser = async (req, res) => {
     const orderData = {
       order_id,
       order_date: currentOrderDate,
+      courier_company_id,
 
       sub_total,
       order_value,
@@ -134,6 +137,8 @@ const GenerateOrderByUser = async (req, res) => {
       order_items: [
         {
           vehicle_id,
+          makers_model,
+          makers_name,
           order_type,
           name,
           sku,
@@ -168,7 +173,7 @@ const GenerateOrderByUser = async (req, res) => {
           },
         },
       },
-      { new: true }
+      { new: true },
     );
 
     return res.status(201).json({
@@ -278,7 +283,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
         $set: {
           "my_orders.$.order_data": order,
         },
-      }
+      },
     );
 
     return res.status(200).json({
@@ -309,7 +314,7 @@ const createShiprocketOrder = async (payload) => {
           Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {
@@ -387,7 +392,7 @@ const findSingleOrderData = async (req, res) => {
 
     // Find order inside user.my_orders array
     const specificOrder = user.my_orders.find(
-      (order) => order.order_id?.toString() === order_id.toString()
+      (order) => order.order_id?.toString() === order_id.toString(),
     );
 
     if (!specificOrder) {
@@ -444,8 +449,6 @@ const checkCouierService = async (req, res) => {
 
     const API_URL = `https://apiv2.shiprocket.in/v1/external/courier/serviceability/?${queryString}`;
 
-    console.log("📦 Checking Serviceability => ", API_URL);
-
     const response = await axios.get(API_URL, {
       headers: {
         Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
@@ -467,24 +470,43 @@ const checkCouierService = async (req, res) => {
       };
     });
 
+    let estimated1 = courier_companies.sort(
+      (a, b) => a.total_price - b.total_price,
+    );
+    let estimated2 = courier_companies.sort(
+      (a, b) =>
+        Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
+    );
+
     if (compareOn === "price") {
       courier_companies.sort((a, b) => a.total_price - b.total_price);
     } else if (compareOn === "days") {
       courier_companies.sort(
         (a, b) =>
-          Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days)
+          Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
       );
     }
 
     return res.status(200).json({
       status: true,
       message: "Serviceability Fetched Successfully",
-      data: courier_companies,
+      is_fast_delivery:
+        estimated1[0].estimated_delivery_days ===
+        estimated2[0].estimated_delivery_days
+          ? false
+          : true,
+      data: {
+        courier_company_id: courier_companies[0].courier_company_id,
+        courier_name: courier_companies[0].courier_name,
+        estimated_delivery_days: courier_companies[0].estimated_delivery_days,
+        freight_charge: courier_companies[0].freight_charge,
+        suppress_date: courier_companies[0].suppress_date,
+      },
     });
   } catch (error) {
     console.error(
       "❌ Shiprocket Error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
 
     return res.status(500).json({
@@ -628,7 +650,7 @@ const OrderCanceByUser = async (req, res) => {
         $set: {
           "my_orders.$.order_data.order_status": "CANCELED",
         },
-      }
+      },
     );
 
     return res.status(200).json({
@@ -715,7 +737,7 @@ const OrderCancelByAdmin = async (req, res) => {
           "my_orders.$.order_data.ship_rocket.status": "CANCELED",
           "my_orders.$.order_data.ship_rocket.delivery_code": "",
         },
-      }
+      },
     );
 
     return res.status(200).json({
@@ -728,7 +750,7 @@ const OrderCancelByAdmin = async (req, res) => {
   } catch (error) {
     console.error(
       "Order cancel error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
 
     return res.status(500).json({
@@ -751,14 +773,14 @@ const cancelShiprocketOrder = async (orderId) => {
           Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return response.data;
   } catch (error) {
     console.error(
       "Shiprocket cancel order error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
     throw error;
   }
@@ -838,7 +860,7 @@ const TrackOrderwithOrderId = async (req, res) => {
           "my_orders.$.order_data.ship_rocket.status": shipmentStatus,
           "my_orders.$.order_data.ship_rocket.delivery_code": deliveryCode,
         },
-      }
+      },
     );
 
     /* 8️⃣ Response */
