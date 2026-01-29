@@ -114,7 +114,8 @@ const API_ROUTES = {
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
     QR_DETAILS: "/qr/:qr_id",
-    GET_QR_TEMPLATES: "/qr-template",
+    GET_QR_TEMPLATES_BULK: "/create/qr-template-in-bluk",
+    GET_QR_TEMPLATE_USER: "/create/qr-template-user/:qr_id",
     UPLODED_TEMPLATE: "/all/uploaded-template",
     VALIDATE_QR: "/validate-qr",
     ASSIGN_QR: "/assign-qr",
@@ -135,7 +136,7 @@ const API_ROUTES = {
   GARAGE: {
     BASE: "/api",
     ADD_VEHICLE: "/v1/add-vehicle",
-    REFRESH_VEHICLE_DATA:"/v1/refresh/vehicle-data",
+    REFRESH_VEHICLE_DATA: "/v1/refresh/vehicle-data",
     ADD_USER_GARAGE: "/v1/user/add-garage",
     GET_GARAGE: "/v1/garage/:user_id",
     REMOVE_VEHICLE: "/v1/garage/remove-vehicle",
@@ -307,8 +308,8 @@ const API_ROUTES = {
     BASE: "/api/notifications",
     SEND: "/send",
     SEND_NOTIFICATION_FOR_CALL: "/send/call-notification",
-    SEND_SMS_NOTIFICATION: "/send/sms-notification/:user_id",
     GET_USER_NOTIFICATIONS: "/:user_id",
+    DELETE_NOTIFICATIONS: "/delete",
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
     VERIFY_SECURITY_CODE: "/verify/security-code",
@@ -392,6 +393,13 @@ const API_ROUTES = {
     GET_MESSAGES: "/messages/:chat_room_id",
     UPDATE_MESSAGE_STATUS: "/messages/:messageId/status",
     UNREAD_COUNT: "/messages/unread/:userId",
+  },
+
+  // Contact To User
+  CONTACT: {
+    BASE: "/api",
+    CALL_USER: "/user/contact-via-call",
+    SEND_SMS_NOTIFICATION: "/send/sms-notification",
   },
 };
 

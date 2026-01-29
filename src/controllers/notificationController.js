@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const ChatList = require("../models/Chat");
 const axios = require("axios");
 const mongoose = require("mongoose");
 
@@ -36,7 +37,7 @@ const sendNotification = async (req, res) => {
     if (sender_id) {
       // 🟢 APP CASE
       sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name basic_details.profile_pic"
+        "basic_details.first_name basic_details.last_name basic_details.profile_pic",
       );
 
       if (!sender) {
@@ -56,7 +57,7 @@ const sendNotification = async (req, res) => {
       sender_id = GUEST_ID;
 
       sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name basic_details.profile_pic"
+        "basic_details.first_name basic_details.last_name basic_details.profile_pic",
       );
 
       if (sender) {
@@ -91,7 +92,7 @@ const sendNotification = async (req, res) => {
       const guestNotificationCount = receiver.notifications.filter(
         (n) =>
           n.sender_id?.toString() === GUEST_ID &&
-          new Date(n.time || receiver.updated_at) > last24Hours
+          new Date(n.time || receiver.updated_at) > last24Hours,
       ).length;
 
       if (guestNotificationCount >= 3) {
@@ -110,8 +111,8 @@ const sendNotification = async (req, res) => {
     const incidentProofArray = Array.isArray(incident_proof)
       ? incident_proof
       : incident_proof
-      ? [incident_proof]
-      : [];
+        ? [incident_proof]
+        : [];
 
     /* -----------------------------
        5️⃣ SAVE NOTIFICATION (DB)
@@ -212,7 +213,7 @@ const sendNotificationForCall = async (req, res) => {
 
     if (sender_id) {
       sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name"
+        "basic_details.first_name basic_details.last_name",
       );
 
       if (!sender) {
@@ -267,59 +268,6 @@ const sendNotificationForCall = async (req, res) => {
   }
 };
 
-const sendSMSNotificationToUser = async (req, res) => {
-  try {
-    const { user_id } = req.params;
-
-    if (!user_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User ID required" });
-    }
-
-    // 1. Find user
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    // 3. Get phone number
-    const phone = user?.basic_details?.phone_number;
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "User phone number not found",
-      });
-    }
-
-    // 4. Send SMS
-    const smsSent = await sendOTPViaSMS(phone, "verify");
-
-    if (!smsSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send SMS",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "SMS sent successfully to offline user",
-      phone,
-    });
-  } catch (error) {
-    console.error("sendSMSNotificationToUser Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-};
-
 const sendOneSignalNotification = async ({
   externalUserId,
   title,
@@ -352,7 +300,7 @@ const sendOneSignalNotification = async ({
           "Content-Type": "application/json",
           Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
         },
-      }
+      },
     );
 
     return response.data;
@@ -394,12 +342,12 @@ const getAllNotification = async (req, res) => {
 
     // 🔔 unseen notifications count
     const unseenCount = notifications.filter(
-      (n) => n.seen_status === false
+      (n) => n.seen_status === false,
     ).length;
 
     // ⏰ latest notifications on top
     const sortedNotifications = notifications.sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     );
 
     // 📄 pagination logic
@@ -506,7 +454,7 @@ const checkSecurityCode = async (req, res) => {
 
     // 3️⃣ Find vehicle inside garage
     const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
+      (v) => v.vehicle_id === vehicle_id,
     );
 
     if (!vehicle) {
@@ -525,23 +473,26 @@ const checkSecurityCode = async (req, res) => {
     await user.save();
 
     // 6️⃣ Auto clear after 10 minutes
-    setTimeout(async () => {
-      try {
-        const freshUser = await User.findById(user_id);
-        if (!freshUser) return;
+    setTimeout(
+      async () => {
+        try {
+          const freshUser = await User.findById(user_id);
+          if (!freshUser) return;
 
-        const freshVehicle = freshUser.garage.vehicles.find(
-          (v) => v.vehicle_id === vehicle_id
-        );
+          const freshVehicle = freshUser.garage.vehicles.find(
+            (v) => v.vehicle_id === vehicle_id,
+          );
 
-        if (freshVehicle) {
-          freshVehicle.vehicle_doc.security_code = "";
-          await freshUser.save();
+          if (freshVehicle) {
+            freshVehicle.vehicle_doc.security_code = "";
+            await freshUser.save();
+          }
+        } catch (err) {
+          console.error("Security code auto-clear error:", err);
         }
-      } catch (err) {
-        console.error("Security code auto-clear error:", err);
-      }
-    }, 10 * 60 * 1000); // 10 minutes
+      },
+      10 * 60 * 1000,
+    ); // 10 minutes
 
     return res.status(200).json({
       success: true,
@@ -583,7 +534,7 @@ const verifySecurityCode = async (req, res) => {
 
     // 2️⃣ Find vehicle inside garage
     const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
+      (v) => v.vehicle_id === vehicle_id,
     );
 
     if (!vehicle) {
@@ -621,8 +572,6 @@ const verifySecurityCode = async (req, res) => {
 
 const isOnnotification = async (req, res) => {
   try {
-    console.log("click");
-
     const { user_id, is_notification_on } = req.body;
 
     // ------------------ VALIDATION ------------------
@@ -678,74 +627,72 @@ const isOnnotification = async (req, res) => {
   }
 };
 
-const sendOTPViaSMS = async (phone, templateType = "verify") => {
+const DeleteNotification = async (req, res) => {
   try {
-    // PRP SMS API configuration
-    const prpSmsConfig = {
-      apiUrl: process.env.PRP_SMS_API_URL || "https://api.prpsms.biz/BulkSMSapi/keyApiSendSMS/SendSmsTemplateName",
-      apiKey: process.env.PRP_SMS_API_KEY,
-      sender: process.env.PRP_SMS_SENDER || "DGVAHN",
-      templates: {
-        verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
-      },
-    };
+    const { user_id, notification_id, chat_room_id } = req.body;
 
-    // Validate configuration
-    if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
-      console.error(
-        "PRP SMS configuration missing. Please check environment variables."
+    if (!user_id || !notification_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and notification_id are required",
+      });
+    }
+
+    // 1️⃣ Find user
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 2️⃣ Find notification object
+    const notification = user.notifications.find(
+      (n) => n._id.toString() === notification_id.toString(),
+    );
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
+    }
+
+    // 3️⃣ If notification type is chat → delete chats
+    if (notification.notification_type === "chat" && chat_room_id) {
+      await ChatList.findOneAndUpdate(
+        { chat_room_id: chat_room_id },
+        { $set: { chats: [] } },
       );
-      return false;
     }
 
-    // Get template name based on type
-    const templateName = prpSmsConfig.templates[templateType];
-    if (!templateName) {
-      console.error(`Template name not found for type: ${templateType}`);
-      return false;
-    }
+    // 4️⃣ Pull notification from array
+    await User.updateOne(
+      { _id: user_id },
+      { $pull: { notifications: { _id: notification_id } } },
+    );
 
-    // Prepare SMS payload for PRP SMS API
-    const smsPayload = {
-      sender: prpSmsConfig.sender,
-      templateName: templateName,
-      smsReciever: [
-        {
-          mobileNo: phone,
-        },
-      ],
-    };
-
-    // Send SMS via PRP SMS API
-    const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        apikey: prpSmsConfig.apiKey,
-      },
-      timeout: 10000, // 10 second timeout
+    return res.status(200).json({
+      success: true,
+      message: "Notification deleted successfully",
     });
-
-    // Check response status
-    if (response.data.isSuccess) {
-      console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
-      console.log(`Response:`, response.data);
-      return true;
-    } else {
-      console.error("PRP SMS API error:", response.data);
-      return false;
-    }
   } catch (error) {
-    console.error("Error sending SMS via PRP SMS:", error.message);
-    return false;
+    console.error("DeleteNotification error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+    });
   }
 };
+
 
 module.exports = {
   sendNotification,
   sendNotificationForCall,
-  sendSMSNotificationToUser,
   getAllNotification,
+  DeleteNotification,
   checkSecurityCode,
   verifySecurityCode,
   seenNotificationByUser,
