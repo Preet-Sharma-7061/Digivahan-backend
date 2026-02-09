@@ -200,6 +200,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
+   console.log("➡️ Calling PREMIMUM RTO API");
   try {
     const response = await axios.post(
       process.env.RTO_PREMIMUM_API_URL,

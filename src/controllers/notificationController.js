@@ -186,6 +186,8 @@ const sendNotification = async (req, res) => {
         longitude: longitude || "",
       },
       androidChannelId,
+      largeIconUrl: incident_proof?.[0] || undefined,
+      bigPictureUrl: incident_proof?.[0] || undefined,
     });
 
     return res.status(201).json({
@@ -274,6 +276,8 @@ const sendOneSignalNotification = async ({
   message,
   data = {},
   androidChannelId,
+  largeIconUrl = "",
+  bigPictureUrl = "",
 }) => {
   try {
     const payload = {
@@ -290,6 +294,12 @@ const sendOneSignalNotification = async ({
 
       // App-side logic data (unchanged)
       data,
+
+      large_icon: largeIconUrl,
+      android_big_picture: bigPictureUrl,
+
+      android_visibility: 1,
+      priority: 10,
     };
 
     const response = await axios.post(
@@ -686,7 +696,6 @@ const DeleteNotification = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   sendNotification,

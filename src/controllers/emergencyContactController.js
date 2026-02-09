@@ -36,8 +36,8 @@ const AddEmergencyContact = async (req, res) => {
     // 🔍 CHECK DUPLICATE
     const isAlreadyExist = user.emergency_contacts.some((contact) => {
       return (
-        contact.phone_number === phone_number &&
-        contact.first_name.toLowerCase() === first_name.toLowerCase() &&
+        contact.phone_number === phone_number ||
+        contact.first_name.toLowerCase() === first_name.toLowerCase() ||
         contact.last_name.toLowerCase() === last_name.toLowerCase()
       );
     });
