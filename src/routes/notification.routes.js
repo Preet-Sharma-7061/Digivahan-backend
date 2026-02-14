@@ -13,8 +13,6 @@ const {
   sendNotificationForCall,
   getAllNotification,
   DeleteNotification,
-  checkSecurityCode,
-  verifySecurityCode,
   seenNotificationByUser,
   isOnnotification,
 } = require("../controllers/notificationController.js");
@@ -53,25 +51,6 @@ router.post(
   seenNotificationByUser,
 );
 
-router.post(
-  API_ROUTES.NOTIFICATION.CHECK_SECURITY_CODE,
-  [
-    commonValidations.userId("user_id"),
-    commonValidations.vehicleIdRequired("vehicle_id"),
-    handleValidationErrors,
-  ],
-  checkSecurityCode,
-);
-
-router.post(
-  API_ROUTES.NOTIFICATION.VERIFY_SECURITY_CODE,
-  [
-    commonValidations.userId("user_id"),
-    commonValidations.vehicleIdRequired("vehicle_id"),
-    handleValidationErrors,
-  ],
-  verifySecurityCode,
-);
 
 router.post(
   API_ROUTES.NOTIFICATION.IS_ON_NOTIFICATION,

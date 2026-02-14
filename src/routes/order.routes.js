@@ -10,32 +10,47 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 const {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
+  GenerateOrderManifest,
+  GenerateLable,
   getUserAllOrder,
   findSingleOrderData,
   checkCouierService,
-  findOrderByOrderId,
-  findOrderByUserId,
+  GetAllNewOrderListToAdmin,
+  findOrderByAdminThrowOrderId,
+  findOrderByAdminThrowUserId,
   TrackOrderwithOrderId,
   OrderCancelByAdmin,
-  OrderCanceByUser,
+  OrderCancelByUser,
 } = require("../controllers/OrderController.js");
 
 router.post(
   API_ROUTES.ORDER.USER_CREATE_ORDER,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  GenerateOrderByUser
+  GenerateOrderByUser,
 );
 
 router.post(
   API_ROUTES.ORDER.ADMIN_CONFIRM_ORDER,
   [commonValidations.orderId("order_id"), handleValidationErrors],
-  ConfirmOrderByAdmin
+  ConfirmOrderByAdmin,
+);
+
+router.get(
+  API_ROUTES.ORDER.ADMIN_GENERATE_MANIFEST,
+  [handleValidationErrors],
+  GenerateOrderManifest,
+);
+
+router.get(
+  API_ROUTES.ORDER.ADMIN_GENERATE_LABEL,
+  [handleValidationErrors],
+  GenerateLable,
 );
 
 router.post(
   API_ROUTES.ORDER.USER_ORDERS,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  getUserAllOrder
+  getUserAllOrder,
 );
 
 router.post(
@@ -45,7 +60,7 @@ router.post(
     commonValidations.orderId("order_id"),
     handleValidationErrors,
   ],
-  findSingleOrderData
+  findSingleOrderData,
 );
 
 router.post(
@@ -54,37 +69,47 @@ router.post(
     commonValidations.validateDeliveryPostcode("delivery_postcode"),
     handleValidationErrors,
   ],
-  checkCouierService
+  checkCouierService,
+);
+
+router.get(
+  API_ROUTES.ORDER.GET_ALL_NEW_ORDER_BYADMIN,
+  handleValidationErrors,
+  GetAllNewOrderListToAdmin,
 );
 
 router.post(
   API_ROUTES.ORDER.FETCH_BY_ORDER_ID,
   [commonValidations.orderId("order_id"), handleValidationErrors],
-  findOrderByOrderId
+  findOrderByAdminThrowOrderId,
 );
 
 router.post(
   API_ROUTES.ORDER.FETCH_BY_USER_ID,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  findOrderByUserId
+  findOrderByAdminThrowUserId,
 );
 
 router.post(
   API_ROUTES.ORDER.CANCEL_ORDER_BY_USER,
-  [commonValidations.orderId("order_id"), handleValidationErrors],
-  OrderCanceByUser
+  [
+    commonValidations.orderId("order_id"),
+    commonValidations.userId("user_id"),
+    handleValidationErrors,
+  ],
+  OrderCancelByUser,
 );
 
 router.post(
   API_ROUTES.ORDER.CANCEL_ORDER_BY_ADMIN,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  OrderCancelByAdmin
+  OrderCancelByAdmin,
 );
 
 router.post(
   API_ROUTES.ORDER.TRACK_ORDER_STATUS,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  TrackOrderwithOrderId
+  TrackOrderwithOrderId,
 );
 
 module.exports = router;

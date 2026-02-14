@@ -3,301 +3,336 @@ const axios = require("axios");
 const User = require("../models/User");
 const Order = require("../models/OrderSchema");
 
-// ------------------------------
-// Format Order Date (YYYY-MM-DD HH:mm)
-// ------------------------------
-const formatOrderDate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-};
 
 // ------------------------------
 // Generate Order Controller
 // ------------------------------
 const GenerateOrderByUser = async (req, res) => {
   try {
-    const {
-      user_id,
-      order_id,
-      courier_company_id,
-      sub_total,
-      order_value,
-      declared_value,
-      shipping_is_billing = 1,
-      is_return = 0,
+    const user = await User.findById(req.body.user_id);
 
-      // Shipping
-      shipping_customer_name,
-      shipping_last_name,
-      shipping_phone,
-      shipping_address,
-      shipping_address_2,
-      shipping_city,
-      shipping_state,
-      shipping_country,
-      shipping_pincode,
-      shipping_email,
-
-      // Billing
-      billing_customer_name,
-      billing_last_name,
-      billing_phone,
-      billing_address,
-      billing_address_2 = "",
-      billing_city,
-      billing_state,
-      billing_country,
-      billing_pincode,
-
-      // Order Item
-      vehicle_id,
-      makers_model,
-      makers_name,
-      order_type,
-      name,
-      sku = "QR-001",
-      units,
-      selling_price,
-      selling_price_currency = "INR",
-      discount = "",
-      tax = "",
-      weight = 0.05,
-
-      // Parcel dimensions
-      length = 20,
-      breadth = 15,
-      height = 10,
-    } = req.body;
-
-    // -----------------------------
-    // Find User
-    // -----------------------------
-    const user = await User.findById(user_id);
-    if (!user) {
+    if (!user)
       return res.status(404).json({
         status: false,
-        message: "Invalid User ID",
+        message: "User not found",
       });
-    }
 
-    const currentOrderDate = formatOrderDate();
+    const order = await Order.create({
+      user_id: user._id,
 
-    // -----------------------------
-    // Prepare Order Data
-    // -----------------------------
-    const orderData = {
-      order_id,
-      order_date: currentOrderDate,
-      courier_company_id,
+      order_id: req.body.order_id,
 
-      sub_total,
-      order_value,
-      order_status: "NEW",
-      declared_value,
-      is_prepared: false,
-      shipping_is_billing,
-      is_return,
-      payment_method: "Prepaid",
+      sub_total: req.body.sub_total,
 
-      // Shipping
-      shipping_customer_name,
-      shipping_last_name,
-      shipping_phone,
-      shipping_address,
-      shipping_address_2,
-      shipping_city,
-      shipping_state,
-      shipping_country,
-      shipping_pincode,
-      shipping_email,
+      order_value: req.body.order_value,
 
-      // Billing
-      billing_customer_name,
-      billing_last_name,
-      billing_phone,
-      billing_address,
-      billing_address_2,
-      billing_city,
-      billing_state,
-      billing_country,
-      billing_pincode,
+      declared_value: req.body.declared_value,
 
-      // Parcel
-      length,
-      breadth,
-      height,
-      weight,
+      shipping: {
+        first_name: req.body.shipping_customer_name,
+        last_name: req.body.shipping_last_name,
+        phone: req.body.shipping_phone,
+        email: req.body.shipping_email,
+        address1: req.body.shipping_address,
+        address2: req.body.shipping_address_2,
+        city: req.body.shipping_city,
+        state: req.body.shipping_state,
+        country: req.body.shipping_country,
+        pincode: req.body.shipping_pincode,
+      },
 
-      // Items
+      billing: {
+        first_name: req.body.billing_customer_name,
+        last_name: req.body.billing_last_name,
+        phone: req.body.billing_phone,
+        address1: req.body.billing_address,
+        address2: req.body.billing_address_2,
+        city: req.body.billing_city,
+        state: req.body.billing_state,
+        country: req.body.billing_country,
+        pincode: req.body.billing_pincode,
+      },
+
+      parcel: {
+        length: req.body.length,
+        breadth: req.body.breadth,
+        height: req.body.height,
+        weight: req.body.weight,
+      },
+
       order_items: [
         {
-          vehicle_id,
-          makers_model,
-          makers_name,
-          order_type,
-          name,
-          sku,
-          units,
-          selling_price: Number(selling_price),
-          selling_price_currency,
-          discount,
-          tax,
-          weight,
+          vehicle_id: req.body.vehicle_id,
+          order_type: req.body.order_type,
+          name: req.body.name,
+          sku: req.body.sku,
+          units: req.body.units,
+          selling_price: req.body.selling_price,
         },
       ],
-    };
 
-    // ------------------------------
-    // Save order in MongoDB
-    // ------------------------------
-    const newOrder = await Order.create({
-      user_id,
-      ...orderData,
-    });
-
-    // ------------------------------
-    // Save in User.my_orders
-    // ------------------------------
-    await User.findByIdAndUpdate(
-      user_id,
-      {
-        $push: {
-          my_orders: {
-            order_id: newOrder._id,
-            order_data: orderData,
-          },
-        },
+      ship_rocket: {
+        channel_order_id: req.body.order_id,
+        courier_company_id: req.body.courier_company_id,
+        courier_name: req.body.courier_name,
       },
-      { new: true },
-    );
-
-    return res.status(201).json({
-      status: true,
-      message: "Order created successfully (without Shiprocket)",
-      data: newOrder,
     });
-  } catch (error) {
-    console.log("Order Creation Error:", error);
-    return res.status(500).json({
+
+    await User.findByIdAndUpdate(user._id, {
+      $push: { my_orders: order._id },
+    });
+
+    res.status(201).json({
+      status: true,
+      message: "Order created",
+      data: order,
+    });
+  } catch (err) {
+    res.status(500).json({
       status: false,
-      message: "Something went wrong",
-      error: error.message,
+      message: err.message,
     });
   }
 };
 
 // Order confirm By admin
 const ConfirmOrderByAdmin = async (req, res) => {
-  try {
-    const { order_id } = req.body; // yeh Mongo _id hoga
+  // const session = await mongoose.startSession();
 
-    // 1) Find Order by _id
+  try {
+    // session.startTransaction();
+
+    const { order_id } = req.body;
+
+    if (!order_id)
+      return res.status(400).json({
+        status: false,
+        message: "order_id required",
+      });
+
+    // STEP 1: Fetch Order
+    // const order = await Order.findById(order_id).session(session);
     const order = await Order.findById(order_id);
 
     if (!order) {
+      // await session.abortTransaction();
       return res.status(404).json({
         status: false,
         message: "Order not found",
       });
     }
 
-    // 2) Check status
-    if (order.order_status !== "NEW") {
+    // STEP 2: Prevent duplicate processing
+    if (order.ship_rocket?.shipment_id) {
+      // await session.abortTransaction();
+
       return res.status(400).json({
         status: false,
-        message: `Order is already ${order.order_status}`,
+        message: "Shiprocket already created for this order",
       });
     }
 
-    // 3) Prepare data for Shiprocket
+    if (order.order_status !== "NEW") {
+      // await session.abortTransaction();
+
+      return res.status(400).json({
+        status: false,
+        message: `Order already ${order.order_status}`,
+      });
+    }
+
+    /* ------------------------------------------------
+       STEP 3: BUILD SHIPROCKET PAYLOAD
+    ------------------------------------------------ */
+
+    const orderItemsPayload = order.order_items.map((item) => ({
+      name: item.name,
+      sku: item.sku,
+      units: item.units,
+      selling_price: item.selling_price,
+      selling_price_currency: item.selling_price_currency,
+      weight: item.weight,
+    }));
+
+    // Optional delivery charges item
+    orderItemsPayload.push({
+      name: "Delivery Charges",
+      sku: "SHIP-001",
+      units: 1,
+      selling_price: order.sub_total,
+      selling_price_currency: "INR",
+    });
+
     const shiprocketPayload = {
-      order_id: order.order_id, // payment/order id
+      order_id: order.order_id,
+
       order_date: order.order_date,
+
       sub_total: order.sub_total,
+
       order_value: order.order_value,
+
       payment_method: order.payment_method,
+
       is_prepared: order.is_prepared,
+
       shipping_is_billing: order.shipping_is_billing,
+
       is_return: order.is_return,
+
       declared_value: order.declared_value,
 
-      // Shipping
-      shipping_customer_name: order.shipping_customer_name,
-      shipping_last_name: order.shipping_last_name,
-      shipping_phone: order.shipping_phone,
-      shipping_address: order.shipping_address,
-      shipping_address_2: order.shipping_address_2,
-      shipping_city: order.shipping_city,
-      shipping_state: order.shipping_state,
-      shipping_country: order.shipping_country,
-      shipping_pincode: order.shipping_pincode,
-      shipping_email: order.shipping_email,
+      // SHIPPING
+      shipping_customer_name: order.shipping.first_name,
 
-      // Billing
-      billing_customer_name: order.billing_customer_name,
-      billing_last_name: order.billing_last_name,
-      billing_phone: order.billing_phone,
-      billing_address: order.billing_address,
-      billing_address_2: order.billing_address_2,
-      billing_city: order.billing_city,
-      billing_state: order.billing_state,
-      billing_country: order.billing_country,
-      billing_pincode: order.billing_pincode,
+      shipping_last_name: order.shipping.last_name,
 
-      // Parcel
-      length: order.length,
-      breadth: order.breadth,
-      height: order.height,
-      weight: order.weight,
+      shipping_phone: order.shipping.phone,
 
-      // Items
-      order_items: order.order_items,
+      shipping_address: order.shipping.address1,
+
+      shipping_address_2: order.shipping.address2,
+
+      shipping_city: order.shipping.city,
+
+      shipping_state: order.shipping.state,
+
+      shipping_country: order.shipping.country,
+
+      shipping_pincode: order.shipping.pincode,
+
+      shipping_email: order.shipping.email,
+
+      // BILLING
+      billing_customer_name: order.billing.first_name,
+
+      billing_last_name: order.billing.last_name,
+
+      billing_phone: order.billing.phone,
+
+      billing_address: order.billing.address1,
+
+      billing_address_2: order.billing.address2,
+
+      billing_city: order.billing.city,
+
+      billing_state: order.billing.state,
+
+      billing_country: order.billing.country,
+
+      billing_pincode: order.billing.pincode,
+
+      // PARCEL
+      length: order.parcel.length,
+
+      breadth: order.parcel.breadth,
+
+      height: order.parcel.height,
+
+      weight: order.parcel.weight,
+
+      // ITEMS
+      order_items: orderItemsPayload,
     };
 
-    // 4) Call Shiprocket
+    /* ------------------------------------------------
+       STEP 4: CREATE ORDER IN SHIPROCKET
+    ------------------------------------------------ */
+
     const shiprocketResponse = await createShiprocketOrder(shiprocketPayload);
 
-    if (!shiprocketResponse) {
-      return res.status(500).json({
-        status: false,
-        message: "Shiprocket API failed",
-      });
+    if (!shiprocketResponse?.shipment_id) {
+      throw new Error("Shiprocket order creation failed");
     }
 
-    // 5) Update Order after confirmation
-    order.ship_rocket = shiprocketResponse;
-    order.ship_rocket.status = "PENDING"; // 🔥 Shiprocket status
-    order.order_status = "PENDING"; // Order status
-    order.is_prepared = true; // ✅ Admin prepared
-    await order.save();
+    /* ------------------------------------------------
+       STEP 5: GENERATE AWB
+    ------------------------------------------------ */
 
-    // 6) Update in User.my_orders also
+    const awbPayload = {
+      shipment_id: shiprocketResponse.shipment_id,
+      courier_company_id: order.ship_rocket.courier_company_id,
+    };
+
+    const awbResponse = await GenerateAWBShipment(awbPayload);
+
+    if (!awbResponse?.response?.data?.awb_code) {
+      throw new Error("AWB generation failed");
+    }
+
+    /* ------------------------------------------------
+       STEP 6: GENERATE PICKUP
+    ------------------------------------------------ */
+
+    const pickupResponse = await GeneratePickUp([
+      shiprocketResponse.shipment_id,
+    ]);
+
+    /* ------------------------------------------------
+       STEP 7: SAVE ALL DATA
+    ------------------------------------------------ */
+
+    order.ship_rocket = {
+      ...order.ship_rocket,
+
+      order_id: shiprocketResponse.order_id,
+
+      shipment_id: shiprocketResponse.shipment_id,
+
+      status_code: shiprocketResponse.status_code,
+
+      onboarding_completed_now: shiprocketResponse.onboarding_completed_now,
+
+      awb_code: awbResponse.response.data.awb_code,
+
+      new_channel: shiprocketResponse.new_channel,
+
+      status: "PENDING",
+    };
+
+    order.awb_data = awbResponse;
+
+    order.pickup_data = pickupResponse;
+
+    order.order_status = "PENDING";
+
+    order.is_prepared = true;
+
+    await order.save();
+    // await order.save({ session });
+
+    /* ------------------------------------------------
+       STEP 8: UPDATE USER REFERENCE ONLY (NO DUPLICATE)
+    ------------------------------------------------ */
+
     await User.updateOne(
-      { _id: order.user_id, "my_orders.order_id": order._id },
+      { _id: order.user_id },
       {
-        $set: {
-          "my_orders.$.order_data": order,
-        },
+        $addToSet: { my_orders: order._id },
       },
+      // { session },
     );
+
+    // await session.commitTransaction();
 
     return res.status(200).json({
       status: true,
-      message: "Order confirmed and sent to Shiprocket",
+      message: "Order confirmed, AWB generated, Pickup scheduled",
       data: order,
+      pickupResponse: pickupResponse,
     });
   } catch (error) {
-    console.log("ConfirmOrderByAdmin Error:", error);
+    // await session.abortTransaction();
+
+    console.error("ConfirmOrder Error:", error);
+
     return res.status(500).json({
       status: false,
-      message: "Something went wrong",
-      error: error.message,
+      message: error.message,
     });
+  } finally {
+    // session.endSession();
+    console.log("Order Confirmed!");
   }
 };
 
@@ -324,6 +359,293 @@ const createShiprocketOrder = async (payload) => {
 };
 
 // ------------------------------
+// AWB Shipment API Function
+// ------------------------------
+
+const GenerateAWBShipment = async (payload) => {
+  try {
+    const url = "https://apiv2.shiprocket.in/v1/external/courier/assign/awb";
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+      },
+    });
+
+    // 👉 PURE SHIPROCKET RESPONSE RETURN
+    return response.data;
+  } catch (error) {
+    console.error(
+      "GenerateAWBShipment Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw {
+      message: "Failed to generate AWB",
+      error: error?.response?.data || error.message,
+    };
+  }
+};
+
+// ------------------------------
+// Generate Pickup API Function
+// ------------------------------
+
+const GeneratePickUp = async (payload) => {
+  try {
+    const url =
+      "https://apiv2.shiprocket.in/v1/external/courier/generate/pickup";
+
+    const response = await axios.post(
+      url,
+      {
+        shipment_id: payload,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+        },
+      },
+    );
+
+    // 🔥 FULL RESPONSE AS-IT-IS
+    return response.data;
+  } catch (error) {
+    console.error(
+      "GeneratePickUp Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw {
+      message: "Failed to generate pickup",
+      error: error?.response?.data || error.message,
+    };
+  }
+};
+
+// ------------------------------
+// Generate Manifest API Function
+// ------------------------------
+
+const GenerateOrderManifest = async (req, res) => {
+  try {
+    const { order_id } = req.params;
+
+    // 1️⃣ Validate input
+    if (!order_id) {
+      return res.status(400).json({
+        status: false,
+        message: "order_id is required",
+      });
+    }
+
+    // 2️⃣ Find order
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    // 3️⃣ NEW VALIDATION: Prevent manifest for canceled orders
+    if (order.order_status === "CANCELED") {
+      return res.status(400).json({
+        status: false,
+        message: "Manifest cannot be generated for canceled order",
+      });
+    }
+
+    // 4️⃣ Check shipment_id exists
+    const shipment_id = order.ship_rocket?.shipment_id;
+
+    if (!shipment_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Shipment ID not found. Generate AWB first.",
+      });
+    }
+
+    // 5️⃣ Prevent duplicate manifest generation
+    if (order.ship_rocket?.manifest_url) {
+      return res.status(200).json({
+        status: true,
+        message: "Manifest already generated",
+        data: {
+          order_id: order._id,
+          shipment_id,
+          manifest_url: order.ship_rocket.manifest_url,
+        },
+      });
+    }
+
+    // 6️⃣ Call Shiprocket Manifest API
+    const response = await axios.post(
+      "https://apiv2.shiprocket.in/v1/external/manifests/generate",
+      {
+        shipment_id: [shipment_id],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    const manifestUrl = response?.data?.manifest_url;
+
+    if (!manifestUrl) {
+      return res.status(500).json({
+        status: false,
+        message: "Manifest generation failed",
+        shiprocket_response: response.data,
+      });
+    }
+
+    // 7️⃣ Save manifest in DB
+    order.ship_rocket.manifest_url = manifestUrl;
+    order.ship_rocket.manifest_generated_at = new Date();
+
+    await order.save();
+
+    // 8️⃣ Success response
+    return res.status(200).json({
+      status: true,
+      message: "Manifest generated successfully",
+      data: {
+        order_id: order._id,
+        shipment_id,
+        manifest_url: manifestUrl,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "GenerateOrderManifest Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to generate manifest",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
+
+// ------------------------------
+// Generate Lable API Function
+// ------------------------------
+
+const GenerateLable = async (req, res) => {
+  try {
+    const { order_id } = req.params;
+
+    // 1️⃣ Validate input
+    if (!order_id) {
+      return res.status(400).json({
+        status: false,
+        message: "order_id is required",
+      });
+    }
+
+    // 2️⃣ Find order
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+
+    // 3️⃣ Check shipment_id exists
+    const shipment_id = order.ship_rocket?.shipment_id;
+
+    if (!shipment_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Shipment ID not found. Generate AWB first.",
+      });
+    }
+
+    // 4️⃣ Prevent duplicate label generation
+    if (order.ship_rocket?.label_url) {
+      return res.status(200).json({
+        status: true,
+        message: "Label already generated",
+        data: {
+          order_id: order._id,
+          shipment_id,
+          label_url: order.ship_rocket.label_url,
+        },
+      });
+    }
+
+    // 5️⃣ Call Shiprocket Label API
+    const response = await axios.post(
+      "https://apiv2.shiprocket.in/v1/external/courier/generate/label",
+      {
+        shipment_id: [shipment_id],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // 6️⃣ Correct response extraction
+    const labelUrl =
+      response?.data?.label_url ||
+      response?.data?.response?.label_url;
+
+    if (!labelUrl) {
+      return res.status(500).json({
+        status: false,
+        message: "Label generation failed",
+        shiprocket_response: response.data,
+      });
+    }
+
+    // 7️⃣ Save label URL in DB
+    order.ship_rocket.label_url = labelUrl;
+    order.ship_rocket.label_generated_at = new Date();
+
+    await order.save();
+
+    // 8️⃣ Return success
+    return res.status(200).json({
+      status: true,
+      message: "Label generated successfully",
+      data: {
+        order_id: order._id,
+        shipment_id,
+        label_url: labelUrl,
+      },
+    });
+
+  } catch (error) {
+    console.error(
+      "GenerateLabel Error:",
+      error?.response?.data || error.message
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to generate label",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
+
+
+// ------------------------------
 // Get All Order From user My-order node
 // ------------------------------
 
@@ -331,7 +653,6 @@ const getUserAllOrder = async (req, res) => {
   try {
     const { user_id } = req.body;
 
-    // Validate
     if (!user_id) {
       return res.status(400).json({
         status: false,
@@ -339,32 +660,30 @@ const getUserAllOrder = async (req, res) => {
       });
     }
 
-    // Find user and get only my_orders field
-    const user = await User.findById(user_id).select("my_orders");
+    // Verify user exists
+    const userExists = await User.exists({ _id: user_id });
 
-    if (!user) {
+    if (!userExists) {
       return res.status(404).json({
         status: false,
         message: "User not found",
       });
     }
 
-    // If no orders found
-    if (!user.my_orders || user.my_orders.length === 0) {
-      return res.status(200).json({
-        status: true,
-        message: "No orders found for this user",
-        orders: [],
-      });
-    }
+    // Fetch orders directly from Order schema
+    const orders = await Order.find({ user_id })
+      .sort({ createdAt: -1 }) // latest first
+      .lean(); // faster performance
 
-    // Return all orders
     return res.status(200).json({
       status: true,
       message: "User orders fetched successfully",
-      orders: user.my_orders,
+      total: orders.length,
+      orders,
     });
   } catch (error) {
+    console.error("getUserAllOrder Error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Something went wrong",
@@ -380,35 +699,35 @@ const findSingleOrderData = async (req, res) => {
   try {
     const { user_id, order_id } = req.body;
 
-    // Find user
-    const user = await User.findById(user_id).select("my_orders");
-
-    if (!user) {
-      return res.status(404).json({
+    // Validate input
+    if (!user_id || !order_id) {
+      return res.status(400).json({
         status: false,
-        message: "User not found",
+        message: "user_id and order_id are required",
       });
     }
 
-    // Find order inside user.my_orders array
-    const specificOrder = user.my_orders.find(
-      (order) => order.order_id?.toString() === order_id.toString(),
-    );
+    // Find order directly from Order schema
+    const order = await Order.findOne({
+      _id: order_id,
+      user_id: user_id,
+    }).lean();
 
-    if (!specificOrder) {
+    if (!order) {
       return res.status(404).json({
         status: false,
         message: "Order not found for this user",
       });
     }
 
-    // Success response
     return res.status(200).json({
       status: true,
       message: "Order details fetched successfully",
-      order: specificOrder,
+      order,
     });
   } catch (error) {
+    console.error("findSingleOrderData Error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Something went wrong",
@@ -520,20 +839,24 @@ const checkCouierService = async (req, res) => {
 // ------------------------------
 // Get Order Details By Admin
 // --
-const findOrderByOrderId = async (req, res) => {
+const findOrderByAdminThrowOrderId = async (req, res) => {
   try {
     const { order_id } = req.body;
 
     // Validate input
-    if (!order_id) {
+    if (!order_id || typeof order_id !== "string") {
       return res.status(400).json({
         status: false,
-        message: "order_id is required",
+        message: "Valid order_id is required",
       });
     }
 
-    // Find order in DB
-    const order = await Order.findOne({ order_id });
+    // Fetch order using indexed field
+    const order = await Order.findOne(
+      { order_id },
+      {}, // projection (optional)
+      { lean: true }, // improves performance
+    );
 
     if (!order) {
       return res.status(404).json({
@@ -548,11 +871,11 @@ const findOrderByOrderId = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.error("❌ Error fetching order:", error.message);
+    console.error("findOrderByOrderId Error:", error);
 
     return res.status(500).json({
       status: false,
-      message: "Something went wrong",
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -562,10 +885,11 @@ const findOrderByOrderId = async (req, res) => {
 // Get All Order by userId Order node
 // --
 
-const findOrderByUserId = async (req, res) => {
+const findOrderByAdminThrowUserId = async (req, res) => {
   try {
-    const { user_id } = req.body;
+    const { user_id, page = 1, limit = 20 } = req.body;
 
+    // Validate user_id
     if (!user_id) {
       return res.status(400).json({
         status: false,
@@ -573,36 +897,101 @@ const findOrderByUserId = async (req, res) => {
       });
     }
 
-    let query = {};
-
-    // Try converting to ObjectId
-    if (mongoose.Types.ObjectId.isValid(user_id)) {
-      query.user_id = new mongoose.Types.ObjectId(user_id);
-    } else {
-      // If not valid ObjectId → search by raw string
-      query.user_id = user_id;
-    }
-
-    const orders = await Order.find(query);
-
-    if (!orders || orders.length === 0) {
-      return res.status(404).json({
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
         status: false,
-        message: "No orders found for this user",
+        message: "Invalid user_id",
       });
     }
+
+    const userObjectId = new mongoose.Types.ObjectId(user_id);
+
+    // Pagination calculation
+    const skip = (page - 1) * limit;
+
+    // Fetch orders
+    const orders = await Order.find({ user_id: userObjectId }, null, {
+      sort: { createdAt: -1 }, // latest first
+      skip,
+      limit,
+      lean: true,
+    });
+
+    // Get total count
+    const totalOrders = await Order.countDocuments({
+      user_id: userObjectId,
+    });
 
     return res.status(200).json({
       status: true,
       message: "Orders fetched successfully",
+
+      pagination: {
+        total: totalOrders,
+        page: Number(page),
+        limit: Number(limit),
+        total_pages: Math.ceil(totalOrders / limit),
+      },
+
       data: orders,
     });
   } catch (error) {
-    console.error("❌ Error finding orders:", error);
+    console.error("findOrderByAdminThrowUserId Error:", error);
 
     return res.status(500).json({
       status: false,
-      message: "Something went wrong",
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// ------------------------------
+// Get All New Order list to Admin
+// --
+const GetAllNewOrderListToAdmin = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.body;
+
+    // pagination calculation
+    const skip = (page - 1) * limit;
+
+    // fetch NEW orders
+    const orders = await Order.find({ order_status: "NEW" }, null, {
+      sort: { createdAt: -1 }, // latest first
+      skip: skip,
+      limit: Number(limit),
+      lean: true, // improves performance
+    }).populate({
+      path: "user_id",
+      select: "name email phone", // optional user info
+    });
+
+    // total count
+    const total = await Order.countDocuments({
+      order_status: "NEW",
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "New orders fetched successfully",
+
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        total_pages: Math.ceil(total / limit),
+      },
+
+      data: orders,
+    });
+  } catch (error) {
+    console.error("GetAllNewOrderListToAdmin Error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to fetch new orders",
       error: error.message,
     });
   }
@@ -610,19 +999,23 @@ const findOrderByUserId = async (req, res) => {
 
 // ------------------------------
 // This apis only hit by user
-const OrderCanceByUser = async (req, res) => {
+const OrderCancelByUser = async (req, res) => {
   try {
-    const { order_id } = req.body;
+    const { order_id, user_id } = req.body;
 
-    if (!order_id) {
+    // Validate input
+    if (!order_id || !user_id) {
       return res.status(400).json({
         status: false,
-        message: "Order id is required",
+        message: "order_id and user_id are required",
       });
     }
 
-    // 1) Find order by _id
-    const order = await Order.findById(order_id);
+    // Find order with user validation
+    const order = await Order.findOne({
+      _id: order_id,
+      user_id: user_id,
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -631,27 +1024,35 @@ const OrderCanceByUser = async (req, res) => {
       });
     }
 
-    // 2) Check prepared status
+    // Prevent cancel if already prepared
     if (order.is_prepared === true) {
       return res.status(400).json({
         status: false,
-        message: "This order is already prepared, you cannot cancel it",
+        message: "Order already prepared, cannot cancel",
       });
     }
 
-    // 3) Cancel order
-    order.order_status = "CANCELED";
-    await order.save();
+    // Prevent cancel if shipment already created
+    if (order.ship_rocket?.shipment_id || order.ship_rocket?.awb_code) {
+      return res.status(400).json({
+        status: false,
+        message: "Shipment already created, cannot cancel this order",
+      });
+    }
 
-    // 4) Update in user.my_orders also
-    await User.updateOne(
-      { _id: order.user_id, "my_orders.order_id": order._id },
-      {
-        $set: {
-          "my_orders.$.order_data.order_status": "CANCELED",
-        },
-      },
-    );
+    // Prevent cancel if already canceled
+    if (order.order_status === "CANCELED") {
+      return res.status(400).json({
+        status: false,
+        message: "Order already canceled",
+      });
+    }
+
+    // Cancel order
+    order.order_status = "CANCELED";
+    order.canceled_at = new Date();
+
+    await order.save();
 
     return res.status(200).json({
       status: true,
@@ -659,10 +1060,11 @@ const OrderCanceByUser = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.log("OrderCanceByUser Error:", error);
+    console.error("OrderCancelByUser Error:", error);
+
     return res.status(500).json({
       status: false,
-      message: "Something went wrong",
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -673,89 +1075,88 @@ const OrderCanceByUser = async (req, res) => {
 // --
 const OrderCancelByAdmin = async (req, res) => {
   try {
-    const { user_id, order_id, shiprocket_orderId } = req.body;
+    const { user_id, order_id } = req.body;
 
-    if (!user_id || !order_id || !shiprocket_orderId) {
+    // Validate input
+    if (!user_id || !order_id) {
       return res.status(400).json({
         status: false,
-        message: "user_id, order_id and shiprocket_orderId are required",
+        message: "user_id and order_id are required",
       });
     }
 
-    // 1️⃣ Find order by order_id (FAST)
-    const order = await Order.findById(order_id);
+    // 1️⃣ Find order with user validation (SECURE + FAST)
+    const order = await Order.findOne({
+      _id: order_id,
+      user_id: user_id,
+    });
 
     if (!order) {
       return res.status(404).json({
         status: false,
-        message: "Order not found",
+        message: "Order not found for this user",
       });
     }
 
-    // 2️⃣ Verify order belongs to user
-    if (String(order.user_id) !== String(user_id)) {
-      return res.status(403).json({
-        status: false,
-        message: "This order does not belong to this user",
-      });
-    }
+    // 2️⃣ Check Shiprocket order exists
+    const shiprocketOrderId = order.ship_rocket?.order_id;
 
-    // 3️⃣ Verify Shiprocket Order ID
-    if (String(order.ship_rocket?.order_id) !== String(shiprocket_orderId)) {
+    if (!shiprocketOrderId) {
       return res.status(400).json({
         status: false,
-        message: "Invalid Shiprocket order id",
+        message: "Shiprocket order id not found",
+      });
+    }
+
+    // 3️⃣ Prevent duplicate cancel
+    if (order.order_status === "CANCELED") {
+      return res.status(400).json({
+        status: false,
+        message: "Order already canceled",
       });
     }
 
     // 4️⃣ Call Shiprocket Cancel API
-    const cancelResponse = await cancelShiprocketOrder(shiprocket_orderId);
+    const cancelResponse = await cancelShiprocketOrder(shiprocketOrderId);
 
-    if (!cancelResponse?.status_code) {
+    if (!cancelResponse) {
       return res.status(400).json({
         status: false,
-        message: "Shiprocket order cancellation failed",
-        shiprocket_response: cancelResponse,
+        message: "Shiprocket cancellation failed",
       });
     }
 
-    // 5️⃣ Update ORDER schema
-    order.ship_rocket.status = "CANCELED";
+    // 5️⃣ Update Order schema
     order.order_status = "CANCELED";
-    order.ship_rocket.delivery_code = "";
+
+    order.ship_rocket.status = "CANCELED";
+
+    order.ship_rocket.awb_code = "";
+
+    order.canceled_at = new Date();
 
     await order.save();
 
-    // 6️⃣ Update USER schema (my_orders array)
-    await User.updateOne(
-      {
-        _id: user_id,
-        "my_orders.order_id": order._id,
-      },
-      {
-        $set: {
-          "my_orders.$.order_data.ship_rocket.status": "CANCELED",
-          "my_orders.$.order_data.ship_rocket.delivery_code": "",
-        },
-      },
-    );
-
     return res.status(200).json({
       status: true,
-      message: "Order cancelled successfully",
-      order_id,
-      shiprocket_orderId,
-      shiprocket_response: cancelResponse,
+      message: "Order canceled successfully",
+
+      data: {
+        order_id: order._id,
+        shiprocket_order_id: shiprocketOrderId,
+        shiprocket_response: cancelResponse,
+      },
     });
   } catch (error) {
     console.error(
-      "Order cancel error:",
+      "OrderCancelByAdmin Error:",
       error?.response?.data || error.message,
     );
 
     return res.status(500).json({
       status: false,
       message: "Failed to cancel order",
+      error: error.message,
     });
   }
 };
@@ -787,11 +1188,11 @@ const cancelShiprocketOrder = async (orderId) => {
 };
 
 // Track Order Status
-// Track Order Status
 const TrackOrderwithOrderId = async (req, res) => {
   try {
-    const { user_id, order_id, shiprocket_orderId } = req.body;
+    const { user_id, order_id } = req.body;
 
+    // 1️⃣ Validate input
     if (!user_id || !order_id) {
       return res.status(400).json({
         status: false,
@@ -799,85 +1200,86 @@ const TrackOrderwithOrderId = async (req, res) => {
       });
     }
 
-    /* 1️⃣ Find order by order_id */
-    const order = await Order.findById(order_id);
+    // 2️⃣ Find order securely
+    const order = await Order.findOne({
+      _id: order_id,
+      user_id: user_id,
+    });
 
     if (!order) {
       return res.status(404).json({
         status: false,
-        message: "Order not found",
+        message: "Order not found for this user",
       });
     }
 
-    /* 2️⃣ Check order belongs to user */
-    if (String(order.user_id) !== String(user_id)) {
-      return res.status(403).json({
-        status: false,
-        message: "This order does not belong to this user",
-      });
-    }
+    // 3️⃣ Get Shiprocket order id automatically
+    const shiprocketOrderId = order.ship_rocket?.order_id;
 
-    /* 3️⃣ Agar shiprocket_orderId NAHI aaya → direct order return */
-    if (!shiprocket_orderId) {
-      return res.status(200).json({
-        status: true,
-        message: "Order fetched successfully (no tracking called)",
-        order,
-      });
-    }
-
-    /* 4️⃣ Agar aaya hai → validate karo */
-    if (String(order.ship_rocket?.order_id) !== String(shiprocket_orderId)) {
+    if (!shiprocketOrderId) {
       return res.status(400).json({
         status: false,
-        message: "Invalid Shiprocket order id",
+        message: "Shiprocket order id not found for tracking",
       });
     }
 
-    /* 5️⃣ Call Shiprocket Tracking API */
-    const trackingData = await trackShiprocketOrder(shiprocket_orderId);
+    // 4️⃣ Call Shiprocket tracking API
+    const trackingData = await trackShiprocketOrder(shiprocketOrderId);
+
+    if (!trackingData) {
+      return res.status(400).json({
+        status: false,
+        message: "Tracking API failed",
+      });
+    }
+
+    // 5️⃣ Extract tracking info safely
+    const shipment = trackingData?.data?.shipments?.[0] || {};
 
     const shipmentStatus =
-      trackingData?.data?.shipments?.status ||
-      trackingData?.data?.status ||
-      "UNKNOWN";
+      shipment?.current_status || trackingData?.data?.status || "UNKNOWN";
 
-    const deliveryCode = trackingData?.data?.delivery_code || "";
+    const awbCode = shipment?.awb || order.ship_rocket?.awb_code || "";
 
-    /* 6️⃣ Update ORDER */
+    const courierName =
+      shipment?.courier || order.ship_rocket?.courier_name || "";
+
+    // 6️⃣ Update Order schema
+    order.order_status = shipmentStatus;
+
     order.ship_rocket.status = shipmentStatus;
-    order.ship_rocket.delivery_code = deliveryCode;
+
+    order.ship_rocket.awb_code = awbCode;
+
+    order.ship_rocket.courier_name = courierName;
+
+    order.ship_rocket.tracking_data = trackingData;
+
+    order.last_tracked_at = new Date();
+
     await order.save();
 
-    /* 7️⃣ Update USER my_orders */
-    await User.findOneAndUpdate(
-      {
-        _id: user_id,
-        "my_orders.order_id": new mongoose.Types.ObjectId(order_id),
-      },
-      {
-        $set: {
-          "my_orders.$.order_data.ship_rocket.status": shipmentStatus,
-          "my_orders.$.order_data.ship_rocket.delivery_code": deliveryCode,
-        },
-      },
-    );
-
-    /* 8️⃣ Response */
+    // 7️⃣ Response
     return res.status(200).json({
       status: true,
-      message: "Order tracked & updated successfully",
-      order_id,
-      shiprocket_orderId,
-      shipment_status: shipmentStatus,
-      delivery_code: deliveryCode,
-      order,
+      message: "Order tracked successfully",
+
+      data: {
+        order_id: order._id,
+        shiprocket_order_id: shiprocketOrderId,
+        shipment_status: shipmentStatus,
+        awb_code: awbCode,
+        courier_name: courierName,
+        tracking: trackingData,
+      },
     });
   } catch (error) {
-    console.error("Track order error:", error?.response?.data || error.message);
+    console.error("TrackOrder Error:", error?.response?.data || error.message);
+
     return res.status(500).json({
       status: false,
       message: "Failed to track order",
+      error: error.message,
     });
   }
 };
@@ -899,12 +1301,15 @@ const trackShiprocketOrder = async (shiprocketOrderId) => {
 module.exports = {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
+  GenerateOrderManifest,
+  GenerateLable,
   getUserAllOrder,
   findSingleOrderData,
   checkCouierService,
-  findOrderByOrderId,
-  findOrderByUserId,
+  GetAllNewOrderListToAdmin,
+  findOrderByAdminThrowOrderId,
+  findOrderByAdminThrowUserId,
   OrderCancelByAdmin,
-  OrderCanceByUser,
+  OrderCancelByUser,
   TrackOrderwithOrderId,
 };

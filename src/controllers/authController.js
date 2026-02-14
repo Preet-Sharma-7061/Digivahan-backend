@@ -1,11 +1,11 @@
 const User = require("../models/User");
-const PrimaryOTP = require("../models/PrimaryOTPSchema");
 const UserDeletion = require("../models/UserDeletion");
 const QRAssignment = require("../models/QRAssignment");
 const RevokedToken = require("../models/revokedTokenSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const redis = require("../utils/redis.js");
+const mongoose = require("mongoose");
 
 const {
   generateOTP,
@@ -26,92 +26,97 @@ const registerInit = async (req, res) => {
     const { first_name, last_name, email, phone, password, otp_channel } =
       req.body;
 
-    // 1. Check permanent user
-    const existingUser = await User.findOne({
-      $or: [
-        { "basic_details.email": email },
-        { "basic_details.phone_number": phone },
-      ],
-    });
-
-    if (existingUser) {
-      if (existingUser.basic_details.email === email) {
-        return res.status(400).json({
-          status: false,
-          error_type: "email",
-          message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
-        });
-      } else {
-        return res.status(400).json({
-          status: false,
-          error_type: "phone",
-          message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
-        });
-      }
+    if (!email || !phone || !password || !otp_channel) {
+      return res.status(400).json({
+        status: false,
+        message: "Required fields missing",
+      });
     }
 
-    const contact = otp_channel === "PHONE" ? phone : email;
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedPhone = phone.trim();
 
-    // 👉 Daily OTP limit check
+    // 🚀 Fast existence check
+    const emailExists = await User.exists({
+      "basic_details.email": normalizedEmail,
+    });
+    if (emailExists) {
+      return res.status(400).json({
+        status: false,
+        error_type: "email",
+        message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
+      });
+    }
+
+    const phoneExists = await User.exists({
+      "basic_details.phone_number": normalizedPhone,
+    });
+    if (phoneExists) {
+      return res.status(400).json({
+        status: false,
+        error_type: "phone",
+        message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
+      });
+    }
+
+    const contact = otp_channel === "PHONE" ? normalizedPhone : normalizedEmail;
+
     const allowed = await canSendOtpToday(contact);
     if (!allowed) {
       return res.status(429).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
       });
     }
 
-    // 2. Generate OTP & Temp ID
+    // 🔐 Generate
     const otpCode = generateOTP(6);
     const userRegisterId = generateTempUserId();
 
-    // 3. OTP Redis me (10 min)
+    // ✅ 1️⃣ Save OTP separately (for verify API)
     await redis.set(`otp:${userRegisterId}`, otpCode, "EX", 600);
 
-    // 4. Temp User Redis me (10 min)
-    const userData = {
-      user_register_id: userRegisterId,
+    // ✅ 2️⃣ Save temp user data separately
+    const tempUserData = {
       first_name,
       last_name,
-      email,
-      phone,
+      email: normalizedEmail,
+      phone: normalizedPhone,
       password,
       otp_channel,
     };
 
     await redis.set(
       `tempUser:${userRegisterId}`,
-      JSON.stringify(userData),
+      JSON.stringify(tempUserData),
       "EX",
-      600
+      600,
     );
 
-    // 5. Send OTP
+    // 📤 Send OTP
     const otpSent = await sendOTP(contact, otpCode, otp_channel, "signup");
 
     if (!otpSent) {
       await redis.del(`otp:${userRegisterId}`);
       await redis.del(`tempUser:${userRegisterId}`);
+
       return res.status(500).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.OTP_SEND_FAILED,
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
-      message: `OTP sent via ${otp_channel.toLowerCase()}.`,
-      valid_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      otp_verify_endpoint: "auth/register/verify-otp",
+      message: `OTP sent via ${otp_channel.toLowerCase()}`,
       user_register_id: userRegisterId,
+      valid_until: new Date(Date.now() + 600000).toISOString(),
+      otp_verify_endpoint: "auth/register/verify-otp",
     });
   } catch (error) {
     console.error("Register init error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -179,8 +184,19 @@ const verifyOtp = async (req, res) => {
   try {
     const { user_register_id, otp } = req.body;
 
-    // 1. Redis se OTP nikalo
-    const savedOtp = await redis.get(`otp:${user_register_id}`);
+    if (!user_register_id || !otp) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid request",
+      });
+    }
+
+    // 🔥 Get both Redis values in parallel
+    const [savedOtp, tempUser] = await Promise.all([
+      redis.get(`otp:${user_register_id}`),
+      redis.get(`tempUser:${user_register_id}`),
+    ]);
+
     if (!savedOtp || savedOtp !== otp) {
       return res.status(400).json({
         status: false,
@@ -189,8 +205,6 @@ const verifyOtp = async (req, res) => {
       });
     }
 
-    // 2. Redis se Temp User nikalo
-    const tempUser = await redis.get(`tempUser:${user_register_id}`);
     if (!tempUser) {
       return res.status(400).json({
         status: false,
@@ -201,8 +215,28 @@ const verifyOtp = async (req, res) => {
 
     const data = JSON.parse(tempUser);
 
-    // 3. Mongo me save
-    const newUser = new User({
+    // 🔥 Safety check (prevent duplicate if verify API called twice)
+    const userExists = await User.exists({
+      $or: [
+        { "basic_details.email": data.email },
+        { "basic_details.phone_number": data.phone },
+      ],
+    });
+
+    if (userExists) {
+      await Promise.all([
+        redis.del(`otp:${user_register_id}`),
+        redis.del(`tempUser:${user_register_id}`),
+      ]);
+
+      return res.status(400).json({
+        status: false,
+        message: "User already exists",
+      });
+    }
+
+    // 🚀 Create user (minimal payload)
+    const newUser = await User.create({
       basic_details: {
         first_name: data.first_name,
         last_name: data.last_name,
@@ -213,31 +247,28 @@ const verifyOtp = async (req, res) => {
         is_phone_number_primary: data.otp_channel === "PHONE",
         profile_completion_percent: 20,
       },
-      public_details: { nick_name: "", address: "", age: 0, gender: "" },
-      old_passwords: {},
       is_tracking_on: true,
       garage: { vehicles: [] },
       is_active: true,
     });
 
-    await newUser.save();
-
     const token = newUser.generateAuthToken();
 
-    // 4. Redis clean
-    await redis.del(`otp:${user_register_id}`);
-    await redis.del(`tempUser:${user_register_id}`);
+    // 🔥 Clean Redis in parallel
+    await Promise.all([
+      redis.del(`otp:${user_register_id}`),
+      redis.del(`tempUser:${user_register_id}`),
+    ]);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: "OTP verified. Account created successfully.",
       token,
     });
   } catch (error) {
     console.error("Verify OTP error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -252,89 +283,62 @@ const signIn = async (req, res) => {
   try {
     const { login_type, login_value, password } = req.body;
 
-    // Validate login_type
-    if (!["email", "phone"].includes(login_type)) {
+    if (!["email", "phone"].includes(login_type) || !login_value || !password) {
       return res.status(400).json({
         status: false,
-        error_type: "Invalid parameter",
         message: ERROR_MESSAGES.INVALID_PARAMETER,
       });
     }
 
-    // Find user by email or phone
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": login_value },
-        { "basic_details.phone_number": login_value },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      login_type === "email"
+        ? login_value.toLowerCase().trim()
+        : login_value.trim();
+
+    const query =
+      login_type === "email"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    // 🔥 Minimal field selection (fast query)
+    const user = await User.findOne(query).select(
+      "basic_details public_details is_tracking_on is_notification_sound_on is_active account_status suspended_until suspension_reason is_logged_in deletion_date",
+    );
 
     if (!user) {
-      // Check which field was used for login to provide specific error
-      if (login_type === "email") {
-        return res.status(401).json({
-          status: false,
-          error_type: "email",
-          message: ERROR_MESSAGES.EMAIL_NOT_REGISTERED,
-        });
-      } else {
-        return res.status(401).json({
-          status: false,
-          error_type: "phone",
-          message: ERROR_MESSAGES.PHONE_NOT_REGISTERED,
-        });
-      }
+      return res.status(401).json({
+        status: false,
+        error_type: login_type,
+        message:
+          login_type === "email"
+            ? ERROR_MESSAGES.EMAIL_NOT_REGISTERED
+            : ERROR_MESSAGES.PHONE_NOT_REGISTERED,
+      });
     }
 
-    // Check if account is active
+    // 🔥 Account active check
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
       });
     }
 
-    // Check if user is suspended
-    if (user.isSuspended()) {
-      const suspensionStatus = user.getSuspensionStatus();
+    // 🔥 Suspension check
+    if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({
         status: false,
         error_type: "suspended",
         message: ERROR_MESSAGES.USER_SUSPENDED,
         data: {
-          suspended_until: suspensionStatus.suspendedUntil,
-          reason: suspensionStatus.reason,
+          suspended_until: user.suspended_until,
+          reason: user.suspension_reason,
         },
       });
     }
 
-    // Check if user is pending deletion and cancel it
-    // Check if user is pending deletion and cancel it
-    if (user.isPendingDeletion()) {
-      try {
-        // 1️⃣ Cancel deletion in user document
-        user.account_status = "ACTIVE";
-        user.deletion_date = null;
-        await user.save();
-
-        // 2️⃣ Remove pending deletion record from UserDeletion collection
-        await UserDeletion.deleteMany({ user_id: user._id, status: "PENDING" });
-
-        // 3️⃣ Reactivate QR codes assigned to the user
-        await QRAssignment.updateMany(
-          { user_id: user._id.toString() },
-          { status: "active" }
-        );
-
-        console.log(`User deletion cancelled for: ${user._id}`);
-      } catch (error) {
-        console.error("Error cancelling user deletion:", error);
-        // Continue with login even if cancellation fails
-      }
-    }
-
-    // Verify password
+    // 🔥 Password validation
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -344,7 +348,7 @@ const signIn = async (req, res) => {
       });
     }
 
-    // Check if account is verified based on login type
+    // 🔥 Verification check
     if (login_type === "email" && !user.basic_details.is_email_verified) {
       return res.status(401).json({
         status: false,
@@ -361,54 +365,77 @@ const signIn = async (req, res) => {
       });
     }
 
-    // Update login status
-    user.is_logged_in = true;
-    await user.save();
+    // 🔥 AUTO CANCEL PENDING DELETION (Parallel + Optimized)
+    if (user.account_status === "PENDING_DELETION") {
+      try {
+        await Promise.all([
+          User.updateOne(
+            { _id: user._id },
+            {
+              $set: {
+                account_status: "ACTIVE",
+                deletion_date: null,
+              },
+            },
+          ),
+          UserDeletion.deleteMany({
+            user_id: user._id,
+            status: "PENDING",
+          }),
+          QRAssignment.updateMany(
+            { user_id: user._id.toString() },
+            { $set: { status: "active" } },
+          ),
+        ]);
 
-    // Generate JWT token
+        console.log(`User deletion auto-cancelled: ${user._id}`);
+      } catch (err) {
+        console.error("Deletion recovery error:", err);
+        // ❗ Do NOT block login
+      }
+    }
+
+    // 🔥 Update login status (no full save)
+    await User.updateOne({ _id: user._id }, { $set: { is_logged_in: true } });
+
     const token = user.generateAuthToken();
 
-    // Prepare comprehensive user response as per specification
-    const userResponse = {
-      basic_details: {
-        profile_pic: user.basic_details.profile_pic || "",
-        first_name: user.basic_details.first_name || "",
-        last_name: user.basic_details.last_name || "",
-        phone_number: user.basic_details.phone_number || "",
-        phone_number_verified:
-          user.basic_details.phone_number_verified || false,
-        is_phone_number_primary:
-          user.basic_details.is_phone_number_primary || false,
-        email: user.basic_details.email || "",
-        is_email_verified: user.basic_details.is_email_verified || false,
-        is_email_primary: user.basic_details.is_email_primary || false,
-        password: "", // Never send password
-        occupation: user.basic_details.occupation || "",
-        profile_completion_percent:
-          user.basic_details.profile_completion_percent || 0,
-      },
-      public_details: {
-        nick_name: user.public_details?.nick_name || "",
-        address: user.public_details?.address || "",
-        age: user.public_details?.age || 0,
-        gender: user.public_details?.gender || "",
-        public_pic: user.public_details?.public_pic,
-      },
-      is_tracking_on: user.is_tracking_on || false,
-      is_notification_sound_on: user.is_notification_sound_on || true,
-      token: token,
-    };
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: "Login successful",
-      user: userResponse,
+      user: {
+        basic_details: {
+          profile_pic: user.basic_details.profile_pic || "",
+          first_name: user.basic_details.first_name || "",
+          last_name: user.basic_details.last_name || "",
+          phone_number: user.basic_details.phone_number || "",
+          phone_number_verified:
+            user.basic_details.phone_number_verified || false,
+          is_phone_number_primary:
+            user.basic_details.is_phone_number_primary || false,
+          email: user.basic_details.email || "",
+          is_email_verified: user.basic_details.is_email_verified || false,
+          is_email_primary: user.basic_details.is_email_primary || false,
+          occupation: user.basic_details.occupation || "",
+          profile_completion_percent:
+            user.basic_details.profile_completion_percent || 0,
+        },
+        public_details: {
+          nick_name: user.public_details?.nick_name || "",
+          address: user.public_details?.address || "",
+          age: user.public_details?.age || 0,
+          gender: user.public_details?.gender || "",
+          public_pic: user.public_details?.public_pic || "",
+        },
+        is_tracking_on: user.is_tracking_on || false,
+        is_notification_sound_on: user.is_notification_sound_on ?? true,
+        token,
+      },
     });
   } catch (error) {
     console.error("Sign in error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -423,8 +450,16 @@ const resendOtp = async (req, res) => {
   try {
     const { user_register_id } = req.body;
 
-    // 1. Redis se temp user nikalo
+    if (!user_register_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid request",
+      });
+    }
+
+    // 🔥 Get temp user
     const tempUserStr = await redis.get(`tempUser:${user_register_id}`);
+
     if (!tempUserStr) {
       return res.status(400).json({
         status: false,
@@ -434,52 +469,64 @@ const resendOtp = async (req, res) => {
     }
 
     const tempUser = JSON.parse(tempUserStr);
+
     const contact =
       tempUser.otp_channel === "PHONE" ? tempUser.phone : tempUser.email;
 
-    // 👉 Daily OTP limit check
+    // 🔥 Cooldown check (30 sec)
+    const cooldownKey = `otpCooldown:${user_register_id}`;
+    const cooldown = await redis.get(cooldownKey);
+
+    if (cooldown) {
+      return res.status(429).json({
+        status: false,
+        message: "Please wait before requesting OTP again",
+      });
+    }
+
+    // 🔥 Daily limit check
     const allowed = await canSendOtpToday(contact);
     if (!allowed) {
       return res.status(429).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.OTP_LIMIT_REACHED,
       });
     }
 
-    // 2. New OTP banao
+    // 🔥 Generate new OTP
     const newOtpCode = generateOTP(6);
 
-    // 3. Redis me OTP update karo (10 min)
-    await redis.set(`otp:${user_register_id}`, newOtpCode, "EX", 600);
+    // 🔥 Update OTP + set cooldown in parallel
+    await Promise.all([
+      redis.set(`otp:${user_register_id}`, newOtpCode, "EX", 600),
+      redis.set(cooldownKey, "1", "EX", 30), // 30 sec cooldown
+    ]);
 
-    // 4. SMS bhejo
+    // 🔥 Send OTP
     const otpSent = await sendOTP(
       contact,
       newOtpCode,
       tempUser.otp_channel,
-      "signup"
+      "signup",
     );
 
     if (!otpSent) {
       return res.status(500).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.OTP_SEND_FAILED,
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: `OTP resent via ${tempUser.otp_channel.toLowerCase()}.`,
-      valid_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      valid_until: new Date(Date.now() + 600000).toISOString(),
       otp_verify_endpoint: "auth/register/verify-otp",
     });
   } catch (error) {
     console.error("Resend OTP error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -494,35 +541,46 @@ const ChangeUserpassword = async (req, res) => {
   try {
     const { user_id, old_password, new_password } = req.body;
 
-    if (!old_password || !new_password) {
+    if (!user_id || !old_password || !new_password) {
       return res.status(400).json({
         status: false,
-        error_type: "validation",
         message: "All fields are required",
       });
     }
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
+    if (old_password === new_password) {
+      return res.status(400).json({
+        status: false,
+        error_type: "new_password",
+        message: "New password cannot be same as old password",
+      });
+    }
+
+    // 🔥 Only required fields select
+    const user = await User.findById(user_id).select(
+      "basic_details.password old_passwords is_active is_logged_in",
+    );
+
     if (!user) {
       return res.status(404).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.USER_NOT_FOUND,
       });
     }
 
-    // 2️⃣ Check account active
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
       });
     }
 
-    // 3️⃣ Old password must match CURRENT password
-    const isOldPasswordCorrect = await user.comparePassword(old_password);
+    // 🔥 Check old password
+    const isOldPasswordCorrect = await bcrypt.compare(
+      old_password,
+      user.basic_details.password,
+    );
+
     if (!isOldPasswordCorrect) {
       return res.status(400).json({
         status: false,
@@ -531,53 +589,40 @@ const ChangeUserpassword = async (req, res) => {
       });
     }
 
-    // 4️⃣ Old password and new password should NOT be same
-    if (old_password === new_password) {
-      return res.status(400).json({
-        status: false,
-        error_type: "new_password",
-        message: "Your old password is match with new password",
-      });
-    }
-
-    // 5️⃣ New password should not be same as CURRENT password
-    const isSameAsCurrent = await user.comparePassword(new_password);
-    if (isSameAsCurrent) {
-      return res.status(400).json({
-        status: false,
-        error_type: "new_password",
-        message: "Your new password is your current password",
-      });
-    }
-
-    // 6️⃣ New password should not match PREVIOUS passwords
-    const oldPasswords = [
-      user.old_passwords.previous_password1,
-      user.old_passwords.previous_password2,
-      user.old_passwords.previous_password3,
+    // 🔥 Check new password against current + history in parallel
+    const passwordChecks = [
+      bcrypt.compare(new_password, user.basic_details.password),
+      user.old_passwords?.previous_password1
+        ? bcrypt.compare(new_password, user.old_passwords.previous_password1)
+        : false,
+      user.old_passwords?.previous_password2
+        ? bcrypt.compare(new_password, user.old_passwords.previous_password2)
+        : false,
+      user.old_passwords?.previous_password3
+        ? bcrypt.compare(new_password, user.old_passwords.previous_password3)
+        : false,
     ];
 
-    for (const oldPass of oldPasswords) {
-      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
-        return res.status(400).json({
-          status: false,
-          error_type: "new_password",
-          message: "Your new password matches your previous password",
-        });
-      }
+    const results = await Promise.all(passwordChecks);
+
+    if (results.some(Boolean)) {
+      return res.status(400).json({
+        status: false,
+        error_type: "new_password",
+        message: "New password cannot match current or previous passwords",
+      });
     }
 
-    // 7️⃣ Shift password history
-    user.old_passwords.previous_password3 =
-      user.old_passwords.previous_password2;
+    // 🔥 Shift password history
+    const updatedOldPasswords = {
+      previous_password3: user.old_passwords?.previous_password2 || "",
+      previous_password2: user.old_passwords?.previous_password1 || "",
+      previous_password1: user.basic_details.password,
+    };
 
-    user.old_passwords.previous_password2 =
-      user.old_passwords.previous_password1;
-
-    user.old_passwords.previous_password1 = user.basic_details.password;
-
-    // 8️⃣ Update password
+    // 🔥 Update password (pre-save hook will hash it)
     user.basic_details.password = new_password;
+    user.old_passwords = updatedOldPasswords;
     user.is_logged_in = true;
 
     await user.save();
@@ -590,7 +635,6 @@ const ChangeUserpassword = async (req, res) => {
     console.error("Change password error:", error);
     return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -601,19 +645,39 @@ const ValidateNewPassword = async (req, res) => {
   try {
     const { user_id, new_password } = req.body;
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
+    if (!user_id || !new_password) {
+      return res.status(400).json({
+        status: false,
+        message: ERROR_MESSAGES.INVALID_PARAMETER,
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        status: false,
+        message: ERROR_MESSAGES.INVALID_PARAMETER,
+      });
+    }
+
+    // 🔥 Only required fields select (important for speed)
+    const user = await User.findById(user_id).select(
+      "basic_details.password old_passwords",
+    );
+
     if (!user) {
       return res.status(404).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.USER_NOT_FOUND,
       });
     }
 
-    // 4️⃣ New password should not be same as current
-    const isSamePassword = await user.comparePassword(new_password);
-    if (isSamePassword) {
+    // 🔥 Check new password against current password
+    const isSameAsCurrent = await bcrypt.compare(
+      new_password,
+      user.basic_details.password,
+    );
+
+    if (isSameAsCurrent) {
       return res.status(400).json({
         status: false,
         error_type: "password",
@@ -621,47 +685,53 @@ const ValidateNewPassword = async (req, res) => {
       });
     }
 
-    // 5️⃣ Check against previous passwords
+    // 🔥 Check against previous passwords (parallel)
     const oldPasswords = [
-      user.old_passwords.previous_password1,
-      user.old_passwords.previous_password2,
-      user.old_passwords.previous_password3,
-    ];
+      user.old_passwords?.previous_password1,
+      user.old_passwords?.previous_password2,
+      user.old_passwords?.previous_password3,
+    ].filter(Boolean);
 
-    for (const oldPass of oldPasswords) {
-      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
-        return res.status(400).json({
-          status: false,
-          error_type: "password",
-          message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
-        });
-      }
+    const passwordChecks = await Promise.all(
+      oldPasswords.map((oldPass) => bcrypt.compare(new_password, oldPass)),
+    );
+
+    if (passwordChecks.includes(true)) {
+      return res.status(400).json({
+        status: false,
+        error_type: "password",
+        message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
+      });
     }
 
-    // 6️⃣ Shift old passwords
-    user.old_passwords.previous_password3 =
-      user.old_passwords.previous_password2;
+    // 🔥 Hash new password manually (avoid full save middleware)
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(new_password, salt);
 
-    user.old_passwords.previous_password2 =
-      user.old_passwords.previous_password1;
-
-    user.old_passwords.previous_password1 = user.basic_details.password; // current hashed password
-
-    // 7️⃣ Update password
-    user.basic_details.password = new_password;
-    user.is_logged_in = true;
-
-    await user.save();
+    // 🔥 Shift password history
+    await User.updateOne(
+      { _id: user_id },
+      {
+        $set: {
+          "basic_details.password": hashedNewPassword,
+          is_logged_in: true,
+          "old_passwords.previous_password3":
+            user.old_passwords?.previous_password2 || "",
+          "old_passwords.previous_password2":
+            user.old_passwords?.previous_password1 || "",
+          "old_passwords.previous_password1": user.basic_details.password,
+        },
+      },
+    );
 
     return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.PASSWORD_CHANGED_SUCCESSFULLY,
     });
   } catch (error) {
-    console.error("Change password error:", error);
+    console.error("Validate new password error:", error);
     return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -676,7 +746,7 @@ const otpBasedLogin = async (req, res) => {
   try {
     const { login_via, value } = req.body;
 
-    if (!["email", "phone"].includes(login_via)) {
+    if (!["email", "phone"].includes(login_via) || !value) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -684,12 +754,20 @@ const otpBasedLogin = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": value },
-        { "basic_details.phone_number": value },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      login_via === "email" ? value.toLowerCase().trim() : value.trim();
+
+    // 🔥 Single field query (NO $or)
+    const query =
+      login_via === "email"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    // 🔥 Select only required fields (important for speed)
+    const user = await User.findOne(query).select(
+      "is_active suspended_until suspension_reason",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -702,6 +780,7 @@ const otpBasedLogin = async (req, res) => {
       });
     }
 
+    // 🔥 Account active check
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
@@ -710,26 +789,30 @@ const otpBasedLogin = async (req, res) => {
       });
     }
 
-    if (user.isSuspended()) {
-      const suspensionStatus = user.getSuspensionStatus();
+    // 🔥 Suspension check (faster than calling method)
+    if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({
         status: false,
         error_type: "suspended",
         message: ERROR_MESSAGES.USER_SUSPENDED,
-        data: suspensionStatus,
+        data: {
+          suspended_until: user.suspended_until,
+          reason: user.suspension_reason,
+        },
       });
     }
 
+    // 🔥 Generate OTP
     const otpCode = generateOTP(6);
     const otpChannel = login_via.toUpperCase();
 
-    // Redis key based on contact
-    const redisKey = `loginOtp:${value}`;
+    const redisKey = `loginOtp:${identifier}`;
 
-    // Save OTP in Redis (10 min)
+    // 🔥 Save OTP (overwrite old if exists)
     await redis.set(redisKey, otpCode, "EX", 600);
 
-    const otpSent = await sendOTP(value, otpCode, otpChannel, "login");
+    // 🔥 Send OTP
+    const otpSent = await sendOTP(identifier, otpCode, otpChannel, "login");
 
     if (!otpSent) {
       await redis.del(redisKey);
@@ -740,7 +823,7 @@ const otpBasedLogin = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: "OTP sent successfully",
       otp_valid_till: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
@@ -748,7 +831,7 @@ const otpBasedLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("OTP based login error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -764,7 +847,7 @@ const verifyLoginOtp = async (req, res) => {
   try {
     const { login_via, value, otp } = req.body;
 
-    if (!["email", "phone"].includes(login_via)) {
+    if (!["email", "phone"].includes(login_via) || !value || !otp) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -772,12 +855,20 @@ const verifyLoginOtp = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": value },
-        { "basic_details.phone_number": value },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      login_via === "email" ? value.toLowerCase().trim() : value.trim();
+
+    // 🔥 Single field query (NO $or)
+    const query =
+      login_via === "email"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    // 🔥 Select only required fields
+    const user = await User.findOne(query).select(
+      "basic_details public_details is_tracking_on is_notification_sound_on is_active suspended_until suspension_reason",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -787,25 +878,28 @@ const verifyLoginOtp = async (req, res) => {
       });
     }
 
+    // 🔥 Active check
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
       });
     }
 
-    if (user.isSuspended()) {
-      const suspensionStatus = user.getSuspensionStatus();
+    // 🔥 Suspension check (faster than method)
+    if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({
         status: false,
         error_type: "suspended",
         message: ERROR_MESSAGES.USER_SUSPENDED,
-        data: suspensionStatus,
+        data: {
+          suspended_until: user.suspended_until,
+          reason: user.suspension_reason,
+        },
       });
     }
 
-    const redisKey = `loginOtp:${value}`;
+    const redisKey = `loginOtp:${identifier}`;
     const savedOtp = await redis.get(redisKey);
 
     if (!savedOtp) {
@@ -824,59 +918,65 @@ const verifyLoginOtp = async (req, res) => {
       });
     }
 
-    // OTP correct — login success
+    // 🔥 Prepare update object
+    const updateObj = {
+      is_logged_in: true,
+    };
+
     if (login_via === "email") {
-      user.basic_details.is_email_verified = true;
+      updateObj["basic_details.is_email_verified"] = true;
     } else {
-      user.basic_details.phone_number_verified = true;
+      updateObj["basic_details.phone_number_verified"] = true;
     }
 
-    user.is_logged_in = true;
-    await user.save();
+    // 🔥 Update without full save (FASTER)
+    await User.updateOne({ _id: user._id }, { $set: updateObj });
+
+    // 🔥 Delete OTP from Redis
+    await redis.del(redisKey);
 
     const token = user.generateAuthToken();
 
-    // Delete OTP from Redis
-    await redis.del(redisKey);
-
-    const userResponse = {
-      basic_details: {
-        profile_pic: user.basic_details.profile_pic || "",
-        first_name: user.basic_details.first_name || "",
-        last_name: user.basic_details.last_name || "",
-        phone_number: user.basic_details.phone_number || "",
-        phone_number_verified:
-          user.basic_details.phone_number_verified || false,
-        is_phone_number_primary:
-          user.basic_details.is_phone_number_primary || false,
-        email: user.basic_details.email || "",
-        is_email_verified: user.basic_details.is_email_verified || false,
-        is_email_primary: user.basic_details.is_email_primary || false,
-        password: "",
-        occupation: user.basic_details.occupation || "",
-        profile_completion_percent:
-          user.basic_details.profile_completion_percent || 0,
-      },
-      public_details: {
-        nick_name: user.public_details?.nick_name || "",
-        address: user.public_details?.address || "",
-        age: user.public_details?.age || 0,
-        gender: user.public_details?.gender || "",
-        public_pic: user.public_details?.public_pic || "",
-      },
-      is_tracking_on: user.is_tracking_on || false,
-      is_notification_sound_on: user.is_notification_sound_on || true,
-      token,
-    };
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: ERROR_MESSAGES.OTP_VERIFIED_SUCCESS,
-      user: userResponse,
+      user: {
+        basic_details: {
+          profile_pic: user.basic_details.profile_pic || "",
+          first_name: user.basic_details.first_name || "",
+          last_name: user.basic_details.last_name || "",
+          phone_number: user.basic_details.phone_number || "",
+          phone_number_verified:
+            login_via === "phone"
+              ? true
+              : user.basic_details.phone_number_verified || false,
+          is_phone_number_primary:
+            user.basic_details.is_phone_number_primary || false,
+          email: user.basic_details.email || "",
+          is_email_verified:
+            login_via === "email"
+              ? true
+              : user.basic_details.is_email_verified || false,
+          is_email_primary: user.basic_details.is_email_primary || false,
+          occupation: user.basic_details.occupation || "",
+          profile_completion_percent:
+            user.basic_details.profile_completion_percent || 0,
+        },
+        public_details: {
+          nick_name: user.public_details?.nick_name || "",
+          address: user.public_details?.address || "",
+          age: user.public_details?.age || 0,
+          gender: user.public_details?.gender || "",
+          public_pic: user.public_details?.public_pic || "",
+        },
+        is_tracking_on: user.is_tracking_on || false,
+        is_notification_sound_on: user.is_notification_sound_on ?? true,
+        token,
+      },
     });
   } catch (error) {
     console.error("Verify login OTP error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -892,7 +992,7 @@ const requestResetPassword = async (req, res) => {
   try {
     const { forget_with, otp_channel } = req.body;
 
-    if (!["EMAIL", "PHONE"].includes(otp_channel)) {
+    if (!forget_with || !["EMAIL", "PHONE"].includes(otp_channel)) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -900,12 +1000,20 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": forget_with },
-        { "basic_details.phone_number": forget_with },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      otp_channel === "EMAIL"
+        ? forget_with.toLowerCase().trim()
+        : forget_with.trim();
+
+    // 🔥 Single field query (NO $or)
+    const query =
+      otp_channel === "EMAIL"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    // 🔥 Select only required fields (faster)
+    const user = await User.findOne(query).select("basic_details is_active");
 
     if (!user) {
       return res.status(404).json({
@@ -918,6 +1026,7 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
+    // 🔥 Active check
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
@@ -926,6 +1035,7 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
+    // 🔥 Verification check
     if (otp_channel === "EMAIL" && !user.basic_details.is_email_verified) {
       return res.status(400).json({
         status: false,
@@ -942,13 +1052,15 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
+    // 🔥 Generate OTP
     const otpCode = generateOTP(6);
-    const redisKey = `resetOtp:${forget_with}`;
+
+    const redisKey = `resetOtp:${identifier}`;
 
     // Save OTP in Redis (10 min)
     await redis.set(redisKey, otpCode, "EX", 600);
 
-    const otpSent = await sendOTP(forget_with, otpCode, otp_channel, "reset");
+    const otpSent = await sendOTP(identifier, otpCode, otp_channel, "reset");
 
     if (!otpSent) {
       await redis.del(redisKey);
@@ -959,7 +1071,7 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: "OTP sent successfully",
       otp_valid_till: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
@@ -967,7 +1079,7 @@ const requestResetPassword = async (req, res) => {
     });
   } catch (error) {
     console.error("Request reset password error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -983,7 +1095,12 @@ const verifyResetOtp = async (req, res) => {
   try {
     const { forget_with, otp_channel, otp, new_password } = req.body;
 
-    if (!["EMAIL", "PHONE"].includes(otp_channel)) {
+    if (
+      !forget_with ||
+      !otp ||
+      !new_password ||
+      !["EMAIL", "PHONE"].includes(otp_channel)
+    ) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -991,12 +1108,21 @@ const verifyResetOtp = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": forget_with },
-        { "basic_details.phone_number": forget_with },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      otp_channel === "EMAIL"
+        ? forget_with.toLowerCase().trim()
+        : forget_with.trim();
+
+    // 🔥 Single indexed query
+    const query =
+      otp_channel === "EMAIL"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    const user = await User.findOne(query).select(
+      "basic_details old_passwords is_active is_tracking_on is_notification_sound_on public_details",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -1014,7 +1140,7 @@ const verifyResetOtp = async (req, res) => {
       });
     }
 
-    const redisKey = `resetOtp:${forget_with}`;
+    const redisKey = `resetOtp:${identifier}`;
     const savedOtp = await redis.get(redisKey);
 
     if (!savedOtp) {
@@ -1033,6 +1159,7 @@ const verifyResetOtp = async (req, res) => {
       });
     }
 
+    // 🔥 Check against current password
     const isSamePassword = await user.comparePassword(new_password);
     if (isSamePassword) {
       return res.status(400).json({
@@ -1042,75 +1169,79 @@ const verifyResetOtp = async (req, res) => {
       });
     }
 
+    // 🔥 Check against previous passwords (parallel)
     const oldPasswords = [
       user.old_passwords.previous_password1,
       user.old_passwords.previous_password2,
       user.old_passwords.previous_password3,
-    ];
+    ].filter(Boolean);
 
-    for (const oldPassword of oldPasswords) {
-      if (oldPassword && (await bcrypt.compare(new_password, oldPassword))) {
-        return res.status(400).json({
-          status: false,
-          error_type: "password",
-          message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
-        });
-      }
+    const matchResults = await Promise.all(
+      oldPasswords.map((oldPass) => bcrypt.compare(new_password, oldPass)),
+    );
+
+    if (matchResults.includes(true)) {
+      return res.status(400).json({
+        status: false,
+        error_type: "password",
+        message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
+      });
     }
 
+    // 🔥 Shift password history
     user.old_passwords.previous_password3 =
       user.old_passwords.previous_password2;
+
     user.old_passwords.previous_password2 =
       user.old_passwords.previous_password1;
+
     user.old_passwords.previous_password1 = user.basic_details.password;
 
+    // 🔥 Update password (pre-save hook hashes it)
     user.basic_details.password = new_password;
     user.is_logged_in = true;
+
     await user.save();
 
     const token = user.generateAuthToken();
 
-    // Delete OTP from Redis
     await redis.del(redisKey);
 
-    const userResponse = {
-      basic_details: {
-        profile_pic: user.basic_details.profile_pic || "",
-        first_name: user.basic_details.first_name || "",
-        last_name: user.basic_details.last_name || "",
-        phone_number: user.basic_details.phone_number || "",
-        phone_number_verified:
-          user.basic_details.phone_number_verified || false,
-        is_phone_number_primary:
-          user.basic_details.is_phone_number_primary || false,
-        email: user.basic_details.email || "",
-        is_email_verified: user.basic_details.is_email_verified || false,
-        is_email_primary: user.basic_details.is_email_primary || false,
-        password: "",
-        occupation: user.basic_details.occupation || "",
-        profile_completion_percent:
-          user.basic_details.profile_completion_percent || 0,
-      },
-      public_details: {
-        nick_name: user.public_details?.nick_name || "",
-        address: user.public_details?.address || "",
-        age: user.public_details?.age || 0,
-        gender: user.public_details?.gender || "",
-      },
-      is_tracking_on: user.is_tracking_on || false,
-      is_notification_sound_on: user.is_notification_sound_on || true,
-      token,
-    };
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: ERROR_MESSAGES.PASSWORD_RESET_SUCCESS,
       login: true,
-      user: userResponse,
+      user: {
+        basic_details: {
+          profile_pic: user.basic_details.profile_pic || "",
+          first_name: user.basic_details.first_name || "",
+          last_name: user.basic_details.last_name || "",
+          phone_number: user.basic_details.phone_number || "",
+          phone_number_verified:
+            user.basic_details.phone_number_verified || false,
+          is_phone_number_primary:
+            user.basic_details.is_phone_number_primary || false,
+          email: user.basic_details.email || "",
+          is_email_verified: user.basic_details.is_email_verified || false,
+          is_email_primary: user.basic_details.is_email_primary || false,
+          occupation: user.basic_details.occupation || "",
+          profile_completion_percent:
+            user.basic_details.profile_completion_percent || 0,
+        },
+        public_details: {
+          nick_name: user.public_details?.nick_name || "",
+          address: user.public_details?.address || "",
+          age: user.public_details?.age || 0,
+          gender: user.public_details?.gender || "",
+        },
+        is_tracking_on: user.is_tracking_on || false,
+        is_notification_sound_on: user.is_notification_sound_on ?? true,
+        token,
+      },
     });
   } catch (error) {
     console.error("Verify reset OTP error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -1126,7 +1257,7 @@ const verifyRequest = async (req, res) => {
   try {
     const { otp_channel, verify_to } = req.body;
 
-    if (!["EMAIL", "PHONE"].includes(otp_channel)) {
+    if (!verify_to || !["EMAIL", "PHONE"].includes(otp_channel)) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -1134,12 +1265,21 @@ const verifyRequest = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": verify_to },
-        { "basic_details.phone_number": verify_to },
-      ],
-    });
+    // 🔥 Normalize input
+    const identifier =
+      otp_channel === "EMAIL"
+        ? verify_to.toLowerCase().trim()
+        : verify_to.trim();
+
+    // 🔥 Single indexed query (faster than $or)
+    const query =
+      otp_channel === "EMAIL"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    const user = await User.findOne(query).select(
+      "basic_details.is_email_verified basic_details.phone_number_verified is_active",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -1157,10 +1297,10 @@ const verifyRequest = async (req, res) => {
       });
     }
 
+    // 🔥 Already verified check
     if (otp_channel === "EMAIL" && user.basic_details.is_email_verified) {
       return res.status(400).json({
         status: false,
-        error_type: "other",
         message: "Email is already verified",
       });
     }
@@ -1168,26 +1308,29 @@ const verifyRequest = async (req, res) => {
     if (otp_channel === "PHONE" && user.basic_details.phone_number_verified) {
       return res.status(400).json({
         status: false,
-        error_type: "other",
         message: "Phone number is already verified",
       });
     }
 
+    // 🔥 Generate OTP & verification id
     const otpCode = generateOTP(6);
     const verificationId = generateVerificationId();
 
     const redisKey = `verifyOtp:${verificationId}`;
 
-    const redisData = {
-      verify_to,
-      otp_channel,
-      otp: otpCode,
-    };
+    // 🔥 Store minimal data in Redis (no need to store otp separately)
+    await redis.set(
+      redisKey,
+      JSON.stringify({
+        verify_to: identifier,
+        otp_channel,
+        otp: otpCode,
+      }),
+      "EX",
+      600,
+    );
 
-    // Save in Redis for 10 min
-    await redis.set(redisKey, JSON.stringify(redisData), "EX", 600);
-
-    const otpSent = await sendOTP(verify_to, otpCode, otp_channel, "verify");
+    const otpSent = await sendOTP(identifier, otpCode, otp_channel, "verify");
 
     if (!otpSent) {
       await redis.del(redisKey);
@@ -1198,16 +1341,17 @@ const verifyRequest = async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      status: "true",
+    return res.status(200).json({
+      status: true,
       message: "OTP sent successfully",
-      verify_to,
+      verify_to: identifier,
       otp_verification_endpoint: `api/user/verify/confirm/${verificationId}`,
       verification_id: verificationId,
+      valid_until: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
   } catch (error) {
     console.error("Verify request error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -1224,7 +1368,12 @@ const verifyConfirm = async (req, res) => {
     const { verificationId } = req.params;
     const { verify_to, otp_channel, otp } = req.body;
 
-    if (!["EMAIL", "PHONE"].includes(otp_channel)) {
+    if (
+      !verificationId ||
+      !verify_to ||
+      !otp ||
+      !["EMAIL", "PHONE"].includes(otp_channel)
+    ) {
       return res.status(400).json({
         status: false,
         error_type: "other",
@@ -1245,9 +1394,15 @@ const verifyConfirm = async (req, res) => {
 
     const savedData = JSON.parse(redisValue);
 
+    // 🔥 Normalize compare values
+    const identifier =
+      otp_channel === "EMAIL"
+        ? verify_to.toLowerCase().trim()
+        : verify_to.trim();
+
     if (
       savedData.otp !== otp ||
-      savedData.verify_to !== verify_to ||
+      savedData.verify_to !== identifier ||
       savedData.otp_channel !== otp_channel
     ) {
       return res.status(400).json({
@@ -1257,12 +1412,22 @@ const verifyConfirm = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": verify_to },
-        { "basic_details.phone_number": verify_to },
-      ],
-    });
+    // 🔥 Single indexed query (NO $or)
+    const query =
+      otp_channel === "EMAIL"
+        ? { "basic_details.email": identifier }
+        : { "basic_details.phone_number": identifier };
+
+    const updateField =
+      otp_channel === "EMAIL"
+        ? { "basic_details.is_email_verified": true }
+        : { "basic_details.phone_number_verified": true };
+
+    const user = await User.findOneAndUpdate(
+      query,
+      { $set: updateField },
+      { new: true },
+    ).select("_id");
 
     if (!user) {
       return res.status(404).json({
@@ -1272,34 +1437,23 @@ const verifyConfirm = async (req, res) => {
       });
     }
 
-    if (otp_channel === "EMAIL") {
-      user.basic_details.is_email_verified = true;
-    } else {
-      user.basic_details.phone_number_verified = true;
-    }
-
-    await user.save();
-
-    // Delete OTP from Redis
+    // 🔥 Delete OTP immediately
     await redis.del(redisKey);
 
     const verifiedMedium = otp_channel.toLowerCase();
-    const timestamp = new Date().toISOString();
 
-    const successMessage =
-      verifiedMedium === "email"
-        ? ERROR_MESSAGES.EMAIL_VERIFIED_SUCCESS
-        : ERROR_MESSAGES.PHONE_VERIFIED_SUCCESS;
-
-    res.status(200).json({
-      status: "true",
-      message: successMessage,
+    return res.status(200).json({
+      status: true,
+      message:
+        verifiedMedium === "email"
+          ? ERROR_MESSAGES.EMAIL_VERIFIED_SUCCESS
+          : ERROR_MESSAGES.PHONE_VERIFIED_SUCCESS,
       verified_medium: verifiedMedium,
-      timestamp,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Verify confirm error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -1312,68 +1466,82 @@ const RequestPrimaryContact = async (req, res) => {
   try {
     const { user_id, set_primary } = req.body;
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
+    if (!user_id || !set_primary) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid parameters",
+      });
+    }
+
+    // 🔥 Fetch only required fields
+    const user = await User.findById(user_id).select(
+      "basic_details.email basic_details.phone_number basic_details.is_email_primary basic_details.is_email_verified basic_details.is_phone_number_primary basic_details.phone_number_verified",
+    );
 
     if (!user) {
       return res.status(404).json({
-        status: "error",
+        status: false,
         message: "User not found",
       });
     }
 
     const basic = user.basic_details;
 
-    // 2️⃣ Identify current primary contact
     let primaryValue = "";
-    let sendType = ""; // email OR phone
+    let sendType = "";
 
-    if (basic.is_email_primary === true && basic.is_email_verified === true) {
-      primaryValue = basic.email;
+    // 🔥 Identify primary contact
+    if (basic.is_email_primary && basic.is_email_verified) {
+      primaryValue = basic.email.toLowerCase().trim();
       sendType = "EMAIL";
-    } else if (
-      basic.is_phone_number_primary === true &&
-      basic.phone_number_verified === true
-    ) {
-      primaryValue = basic.phone_number;
+    } else if (basic.is_phone_number_primary && basic.phone_number_verified) {
+      primaryValue = basic.phone_number.trim();
       sendType = "PHONE";
     } else {
       return res.status(400).json({
-        status: "error",
-        message: "No primary contact found for this user",
+        status: false,
+        message: "No verified primary contact found",
       });
     }
 
-    // 3️⃣ Generate OTP
+    // 🔥 Generate OTP
     const otp = generateOTP(6);
 
-    // 4️⃣ Save OTP in database
-    await PrimaryOTP.create({
-      user_registered_id: user._id,
-      otp: otp,
-      set_primary,
-      otp_expires_at: new Date(Date.now() + 10 * 60 * 1000),
-    });
+    // 🔥 Redis key
+    const redisKey = `primaryOtp:${user_id}`;
 
-    // 5️⃣ Send OTP on primary contact
-    if (sendType === "EMAIL") {
-      await sendOTP(primaryValue, otp, sendType, "primary");
-    } else {
-      await sendOTP(primaryValue, otp, sendType);
+    // 🔥 Store in Redis (10 min expiry)
+    const redisData = {
+      otp,
+      set_primary,
+      sendType,
+      contact: primaryValue,
+    };
+
+    await redis.set(redisKey, JSON.stringify(redisData), "EX", 600);
+
+    // 🔥 Send OTP
+    const otpSent = await sendOTP(primaryValue, otp, sendType, "primary");
+
+    if (!otpSent) {
+      await redis.del(redisKey);
+      return res.status(500).json({
+        status: false,
+        message: "Failed to send OTP",
+      });
     }
 
     return res.status(200).json({
-      status: "success",
+      status: true,
       message: `OTP sent successfully to your primary ${sendType}`,
       primary_contact: primaryValue,
-      user_register_id: user._id,
+      expires_in: 600,
     });
   } catch (error) {
     console.error("RequestPrimaryContact Error:", error);
     return res.status(500).json({
-      status: "error",
-      message: "Something went wrong",
-      error: error.message,
+      status: false,
+      message: "Internal server error",
     });
   }
 };
@@ -1384,56 +1552,80 @@ const VerifyOTPforsetPrimaryContact = async (req, res) => {
     const { user_id, otp } = req.body;
 
     if (!user_id || !otp) {
-      return res.status(400).json({ message: "user_id and otp are required" });
+      return res.status(400).json({
+        status: false,
+        message: "user_id and otp are required",
+      });
     }
 
-    // 1️⃣ Find OTP entry using user_registered_id (ObjectId)
-    const otpRecord = await PrimaryOTP.findOne({
-      user_registered_id: user_id,
-    });
+    // 🔥 Redis key
+    const redisKey = `primaryOtp:${user_id}`;
+    const redisValue = await redis.get(redisKey);
 
-    if (!otpRecord) {
-      return res.status(404).json({ message: "OTP record not found" });
+    if (!redisValue) {
+      return res.status(400).json({
+        status: false,
+        error_type: "OTP",
+        message: "OTP expired or not found",
+      });
     }
 
-    // 2️⃣ Check OTP expiry
-    if (otpRecord.otp_expires_at < new Date()) {
-      return res.status(410).json({ message: "OTP expired" });
+    const savedData = JSON.parse(redisValue);
+
+    // 🔥 OTP match check
+    if (savedData.otp !== otp) {
+      return res.status(401).json({
+        status: false,
+        error_type: "OTP",
+        message: "Invalid OTP",
+      });
     }
 
-    // 3️⃣ Verify OTP
-    if (otpRecord.otp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP" });
+    // 🔥 Prepare update object (NO full document load)
+    let updateData = {};
+
+    if (savedData.set_primary === "phone") {
+      updateData = {
+        "basic_details.is_phone_number_primary": true,
+        "basic_details.is_email_primary": false,
+        "basic_details.phone_number_verified": true,
+      };
+    } else if (savedData.set_primary === "email") {
+      updateData = {
+        "basic_details.is_email_primary": true,
+        "basic_details.is_phone_number_primary": false,
+        "basic_details.is_email_verified": true,
+      };
+    } else {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid primary type",
+      });
     }
 
-    // 4️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // 🔥 Atomic update (no find → save cycle)
+    const result = await User.updateOne({ _id: user_id }, { $set: updateData });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
     }
 
-    // 5️⃣ UPDATE PRIMARY CONTACT
-    if (otpRecord.set_primary === "phone") {
-      user.basic_details.is_phone_number_primary = true;
-      user.basic_details.is_email_primary = false;
-      user.basic_details.phone_number_verified = true;
-    } else if (otpRecord.set_primary === "email") {
-      user.basic_details.is_email_primary = true;
-      user.basic_details.is_phone_number_primary = false;
-      user.basic_details.is_email_verified = true;
-    }
-
-    await user.save();
-
-    // 6️⃣ Delete OTP record (prevent reuse)
-    await PrimaryOTP.deleteOne({ _id: otpRecord._id });
+    // 🔥 Delete OTP from Redis (prevent reuse)
+    await redis.del(redisKey);
 
     return res.status(200).json({
-      message: `Primary ${otpRecord.set_primary} updated successfully`,
+      status: true,
+      message: `Primary ${savedData.set_primary} updated successfully`,
     });
   } catch (error) {
-    console.error("Error verifying OTP:", error);
-    return res.status(500).json({ message: "Internal Server Error", error });
+    console.error("Verify primary OTP error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
   }
 };
 
@@ -1484,41 +1676,75 @@ const suspendUser = async (req, res) => {
   try {
     const { user_id, suspend_until, reason } = req.body;
 
-    // Find user by email or phone number
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": user_id },
-        { "basic_details.phone_number": user_id },
-      ],
-    });
-
-    if (!user) {
-      return res.status(404).json({
+    if (!user_id || !suspend_until || !reason) {
+      return res.status(400).json({
         status: false,
-        message: ERROR_MESSAGES.USER_NOT_FOUND,
+        message: "user_id, suspend_until and reason are required",
       });
     }
 
-    // Check if user is already suspended
-    if (user.isSuspended()) {
+    const suspendDate = new Date(suspend_until);
+
+    if (isNaN(suspendDate.getTime()) || suspendDate <= new Date()) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid suspend date",
+      });
+    }
+
+    // 🔥 Optimized single query update
+    const user = await User.findOneAndUpdate(
+      {
+        $or: [
+          { "basic_details.email": user_id },
+          { "basic_details.phone_number": user_id },
+        ],
+        $or: [
+          { suspended_until: null },
+          { suspended_until: { $lte: new Date() } }, // not currently suspended
+        ],
+      },
+      {
+        $set: {
+          suspended_until: suspendDate,
+          suspension_reason: reason,
+          is_logged_in: false,
+        },
+      },
+      {
+        new: true,
+        select: "_id suspended_until suspension_reason",
+      },
+    );
+
+    if (!user) {
+      // Check if user exists but already suspended
+      const existingUser = await User.findOne({
+        $or: [
+          { "basic_details.email": user_id },
+          { "basic_details.phone_number": user_id },
+        ],
+      }).select("_id suspended_until suspension_reason");
+
+      if (!existingUser) {
+        return res.status(404).json({
+          status: false,
+          message: ERROR_MESSAGES.USER_NOT_FOUND,
+        });
+      }
+
       return res.status(400).json({
         status: false,
         message: SUCCESS_MESSAGES.USER_ALREADY_SUSPENDED,
         data: {
-          user_id: user._id,
-          suspended_till: user.suspended_until,
-          reason: user.suspension_reason,
+          user_id: existingUser._id,
+          suspended_till: existingUser.suspended_until,
+          reason: existingUser.suspension_reason,
         },
       });
     }
 
-    // Update user suspension details
-    user.suspended_until = new Date(suspend_until);
-    user.suspension_reason = reason;
-    user.is_logged_in = false; // Log out the user immediately
-    await user.save();
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.USER_SUSPENDED_SUCCESSFULLY,
       data: {
@@ -1529,7 +1755,7 @@ const suspendUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Suspend user error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
@@ -1544,13 +1770,33 @@ const removeUserSuspension = async (req, res) => {
   try {
     const { user_id } = req.body;
 
-    // Find user by email or phone number
-    const user = await User.findOne({
-      $or: [
-        { "basic_details.email": user_id },
-        { "basic_details.phone_number": user_id },
-      ],
-    });
+    if (!user_id) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id is required",
+      });
+    }
+
+    // 🔥 Atomic update (only if suspended)
+    const user = await User.findOneAndUpdate(
+      {
+        $or: [
+          { "basic_details.email": user_id },
+          { "basic_details.phone_number": user_id },
+        ],
+        suspended_until: { $ne: null }, // must be suspended
+      },
+      {
+        $set: {
+          suspended_until: null,
+          suspension_reason: "",
+        },
+      },
+      {
+        new: true,
+        select: "_id",
+      }
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -1559,31 +1805,19 @@ const removeUserSuspension = async (req, res) => {
       });
     }
 
-    // Check if user is actually suspended
-    if (!user.suspended_until) {
-      return res.status(400).json({
-        status: false,
-        message: ERROR_MESSAGES.USER_NOT_FOUND_OR_NOT_SUSPENDED,
-      });
-    }
-
-    // Remove suspension
-    user.suspended_until = null;
-    user.suspension_reason = "";
-    await user.save();
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.USER_ACTIVATED_SUCCESSFULLY,
     });
   } catch (error) {
     console.error("Remove user suspension error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       message: ERROR_MESSAGES.SERVER_ISSUE,
     });
   }
 };
+
 
 const MAX_DAILY_OTP = 3;
 

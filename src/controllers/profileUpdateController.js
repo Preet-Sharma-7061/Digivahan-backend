@@ -1,24 +1,23 @@
 const User = require("../models/User");
+const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
 const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
+const mongoose = require("mongoose");
 
 const UpdateUserDetails = async (req, res) => {
   try {
-    const {
-      user_id,
-      first_name,
-      last_name,
-      email,
-      phone_number,
-      occupation,
-      nick_name,
-      address,
-      age,
-      gender,
-    } = req.body;
+    const { user_id, ...body } = req.body;
 
-    // ===== 1️⃣ Find existing user =====
-    const user = await User.findById(user_id);
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    const user = await User.findById(user_id).select(
+      "basic_details public_details emergency_contacts"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -27,60 +26,97 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
-    // 🔥 Store old public_ids (for deletion later)
-    let oldProfilePublicId = null;
-    let oldPublicPublicId = null;
+    let oldProfilePublicId = user.basic_details.public_id || null;
+    let oldPublicPublicId = user.public_details.public_id || null;
 
-    // ===== 2️⃣ Profile Pic Update =====
-    if (req.files?.profile_pic?.[0]?.path) {
-      oldProfilePublicId = user.basic_details.public_id || null;
+    let newProfileImage = null;
+    let newPublicImage = null;
 
-      user.basic_details.profile_pic = req.files.profile_pic[0].path;
-      user.basic_details.public_id = req.files.profile_pic[0].filename;
+    // ==============================
+    // 🔥 Upload Profile Pic (if exists)
+    // ==============================
+    if (req.files?.profile_pic?.[0]) {
+      const buffer = req.files.profile_pic[0].buffer;
+
+      newProfileImage = await new Promise((resolve, reject) => {
+        cloudinary.uploader
+          .upload_stream(
+            { folder: "user/profile", resource_type: "image" },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          )
+          .end(buffer);
+      });
+
+      user.basic_details.profile_pic = newProfileImage.secure_url;
+      user.basic_details.public_id = newProfileImage.public_id;
     }
 
-    // ===== 3️⃣ Public Pic Update =====
-    if (req.files?.public_pic?.[0]?.path) {
-      oldPublicPublicId = user.public_details.public_id || null;
+    // ==============================
+    // 🔥 Upload Public Pic (if exists)
+    // ==============================
+    if (req.files?.public_pic?.[0]) {
+      const buffer = req.files.public_pic[0].buffer;
 
-      user.public_details.public_pic = req.files.public_pic[0].path;
-      user.public_details.public_id = req.files.public_pic[0].filename;
+      newPublicImage = await new Promise((resolve, reject) => {
+        cloudinary.uploader
+          .upload_stream(
+            { folder: "user/public", resource_type: "image" },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          )
+          .end(buffer);
+      });
+
+      user.public_details.public_pic = newPublicImage.secure_url;
+      user.public_details.public_id = newPublicImage.public_id;
     }
 
-    // ===== 4️⃣ Update basic details =====
-    if (first_name) user.basic_details.first_name = first_name;
-    if (last_name) user.basic_details.last_name = last_name;
-    if (email) {
-      user.basic_details.email = email;
-      user.basic_details.is_email_primary = false;
-      user.basic_details.is_email_verified = false;
-    }
-    if (phone_number) user.basic_details.phone_number = phone_number;
-    if (occupation) user.basic_details.occupation = occupation;
+    // ==============================
+    // 🔥 Update other fields
+    // ==============================
+    if (body.first_name)
+      user.basic_details.first_name = body.first_name.trim();
 
-    // ===== 5️⃣ Update public details =====
-    if (nick_name) user.public_details.nick_name = nick_name;
-    if (address) user.public_details.address = address;
-    if (age !== undefined) user.public_details.age = age;
-    if (gender) user.public_details.gender = gender;
+    if (body.last_name)
+      user.basic_details.last_name = body.last_name.trim();
 
-    // 🟢 6️⃣ Recalculate profile completion %
+    if (body.occupation)
+      user.basic_details.occupation = body.occupation.trim();
+
+    if (body.nick_name)
+      user.public_details.nick_name = body.nick_name.trim();
+
+    if (body.address)
+      user.public_details.address = body.address.trim();
+
+    if (body.age !== undefined)
+      user.public_details.age = body.age;
+
+    if (body.gender)
+      user.public_details.gender = body.gender;
+
+    // 🔥 Recalculate profile completion
     user.basic_details.profile_completion_percent =
       calculateProfileCompletion(user);
 
-    // ===== 6️⃣ Save user first =====
     await user.save();
 
-    // ===== 7️⃣ Delete old images AFTER save =====
-    if (oldProfilePublicId) {
+    // ==============================
+    // 🔥 Delete OLD images after successful save
+    // ==============================
+    if (oldProfilePublicId && newProfileImage) {
       deleteFromCloudinary(oldProfilePublicId).catch(console.error);
     }
 
-    if (oldPublicPublicId) {
+    if (oldPublicPublicId && newPublicImage) {
       deleteFromCloudinary(oldPublicPublicId).catch(console.error);
     }
 
-    // ===== 8️⃣ Response =====
     return res.status(200).json({
       status: true,
       message: "User details updated successfully.",
@@ -90,20 +126,28 @@ const UpdateUserDetails = async (req, res) => {
   } catch (error) {
     console.error("UpdateUserDetails error:", error);
 
+    // 🔥 If upload happened but save failed → rollback new images
+    if (newProfileImage?.public_id) {
+      await deleteFromCloudinary(newProfileImage.public_id).catch(() => {});
+    }
+
+    if (newPublicImage?.public_id) {
+      await deleteFromCloudinary(newPublicImage.public_id).catch(() => {});
+    }
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
+
 
 // Get user Basic details
 const getUserDetails = async (req, res) => {
   try {
     const { user_id, details_type } = req.body;
 
-    // Validate input
     if (!user_id || !details_type) {
       return res.status(400).json({
         success: false,
@@ -111,7 +155,6 @@ const getUserDetails = async (req, res) => {
       });
     }
 
-    // Allowed keys
     const validTypes = [
       "basic_details",
       "public_details",
@@ -119,7 +162,6 @@ const getUserDetails = async (req, res) => {
       "chat_box",
       "emergency_contacts",
       "garage",
-      "live_tracking",
       "notifications",
       "my_orders",
       "suspended_until",
@@ -134,27 +176,21 @@ const getUserDetails = async (req, res) => {
     if (!validTypes.includes(details_type)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid details_type. Allowed: ${validTypes.join(", ")}`,
+        message: "Invalid details_type",
       });
     }
 
-    // Fetch full user
-    let user = await User.findById(user_id).lean();
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // ------------------------------------------
-    // SPECIAL CASE: ALL → RETURN FULL USER OBJECT
-    // ------------------------------------------
+    // 🔥 ALL CASE
     if (details_type === "all") {
-      // Hide password for safety
-      if (user.basic_details?.password) {
-        user.basic_details.password = undefined;
+      const user = await User.findById(user_id)
+        .select("-basic_details.password")
+        .lean();
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
       }
 
       return res.status(200).json({
@@ -164,27 +200,39 @@ const getUserDetails = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------
-    // SPECIAL CASE: BASIC DETAILS (HIDE PASSWORD)
-    // ----------------------------------------------------
+    // 🔥 BASIC DETAILS (password excluded automatically)
     if (details_type === "basic_details") {
-      const cleanBasic = {
-        ...user.basic_details,
-        password: undefined, // hide password
-      };
+      const user = await User.findById(user_id)
+        .select("-basic_details.password")
+        .lean();
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
       return res.status(200).json({
         success: true,
         message: "Basic details fetched",
-        data: cleanBasic,
+        data: user.basic_details,
       });
     }
 
-    // ----------------------------------------------------
-    // SPECIAL CASE: suspension_reason
-    // RETURN ONLY { suspension_reason: "…" }
-    // ----------------------------------------------------
+    // 🔥 Suspension reason (single field)
     if (details_type === "suspension_reason") {
+      const user = await User.findById(user_id)
+        .select("suspension_reason -_id")
+        .lean();
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
       return res.status(200).json({
         success: true,
         message: "Suspension reason fetched",
@@ -192,24 +240,28 @@ const getUserDetails = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------
-    // GENERIC CASE (public_details, garage, address_book etc.)
-    // Return that single field
-    // ----------------------------------------------------
-    const data = user[details_type]; // dynamic access: user["public_details"]
+    // 🔥 Generic case (ONLY requested field)
+    const user = await User.findById(user_id)
+      .select(`${details_type} -_id`)
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: `${details_type} fetched`,
-      data: data || null,
+      data: user[details_type] || null,
     });
   } catch (error) {
-    console.log("getUserDetails error →", error);
-
+    console.error("getUserDetails error →", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };

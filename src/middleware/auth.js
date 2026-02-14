@@ -29,7 +29,7 @@ const authenticateToken = async (req, res, next) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "your-secret-key"
+      process.env.JWT_SECRET || "your-secret-key",
     );
     const user = await User.findById(decoded.userId);
 
@@ -48,15 +48,14 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Check if user is suspended
-    if (user.isSuspended()) {
-      const suspensionStatus = user.getSuspensionStatus();
+    // 🔥 Direct suspension check (faster, no schema method required)
+    if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({
         status: false,
         message: ERROR_MESSAGES.USER_SUSPENDED,
         data: {
-          suspended_until: suspensionStatus.suspendedUntil,
-          reason: suspensionStatus.reason,
+          suspended_until: user.suspended_until,
+          reason: user.suspension_reason,
         },
       });
     }
@@ -100,7 +99,7 @@ const optionalAuth = async (req, res, next) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "your-secret-key"
+      process.env.JWT_SECRET || "your-secret-key",
     );
     const user = await User.findById(decoded.userId);
 

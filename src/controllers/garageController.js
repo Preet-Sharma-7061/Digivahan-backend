@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
 const axios = require("axios");
+const redis = require("../utils/redis");
 const { SUCCESS_MESSAGES, ERROR_MESSAGES } = require("../../constants");
 const {
   maskName,
@@ -16,7 +17,6 @@ const {
 const addVehicle = async (req, res) => {
   try {
     const { vehicle_number } = req.body;
-
     if (!vehicle_number) {
       return res.status(400).json({
         status: false,
@@ -24,15 +24,10 @@ const addVehicle = async (req, res) => {
       });
     }
 
-    let vehicleInfoDoc = await VehicleInfoData.findOne();
-
-    if (!vehicleInfoDoc) {
-      vehicleInfoDoc = new VehicleInfoData({ vehicles: [] });
-    }
-
-    const cachedVehicle = vehicleInfoDoc.vehicles.find(
-      (v) => v.vehicle_id === vehicle_number,
-    );
+    // 🔥 FAST indexed lookup
+    const cachedVehicle = await VehicleInfoData.findOne({
+      vehicle_id: vehicle_number,
+    }).lean();
 
     if (cachedVehicle) {
       return res.status(200).json({
@@ -40,44 +35,24 @@ const addVehicle = async (req, res) => {
         message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
         data: {
           result: maskVehicleResponse(cachedVehicle.api_data),
-          data_source: cachedVehicle.data_source || "vehicle_info_cache",
+          data_source: cachedVehicle.data_source,
         },
       });
     }
 
+    // ⛔ External API only if not cached
     let rtoData;
     let dataSource = "rto_api";
 
     try {
-      // 🥇 ALWAYS try Normal first
       rtoData = await fetchVehicleDataFromRTO(vehicle_number);
     } catch (error) {
-      // 🔥 Normal RTO failed → silently fallback
       if (error.statusCode === 500) {
-        try {
-          rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number);
-          dataSource = "rto_premium_api";
-        } catch (premiumError) {
-          // ❌ ONLY HERE send response
-          return res.status(premiumError.statusCode || 502).json({
-            status: false,
-            message: "All RTO services unavailable",
-          });
-        }
+        rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number);
+        dataSource = "rto_premium_api";
       } else {
-        return res.status(500).json({
-          status: false,
-          message: "Unexpected RTO error",
-        });
+        throw error;
       }
-    }
-
-    // 🔥 HARD GUARD
-    if (!rtoData) {
-      return res.status(502).json({
-        status: false,
-        message: "RTO services unavailable",
-      });
     }
 
     const vehicleData = transformRTODataToVehicleSchema(
@@ -85,13 +60,12 @@ const addVehicle = async (req, res) => {
       vehicle_number,
     );
 
-    vehicleInfoDoc.vehicles.push({
+    // 🔥 Single insert, no array push
+    await VehicleInfoData.create({
       vehicle_id: vehicle_number,
       api_data: vehicleData,
-      data_source: dataSource, // 👈 IMPORTANT
+      data_source: dataSource,
     });
-
-    await vehicleInfoDoc.save();
 
     return res.status(200).json({
       status: true,
@@ -110,56 +84,92 @@ const addVehicle = async (req, res) => {
   }
 };
 
-// Mask The vehicle data
 const maskVehicleResponse = (data) => {
   if (!data) return data;
+
+  const custom = data.custom_vehicle_info || {};
+  const rto = data.rto_data || {};
 
   return {
     ...data,
 
     custom_vehicle_info: {
-      ...data.custom_vehicle_info,
-      owner_name: maskName(data.custom_vehicle_info.owner_name),
-      vehicle_number: data.custom_vehicle_info.vehicle_number,
-      engine: maskAlphaNumeric(data.custom_vehicle_info.engine),
-      chassis_number: maskAlphaNumeric(data.custom_vehicle_info.chassis_number),
-      insurance_policy_number: maskAlphaNumeric(
-        data.custom_vehicle_info.insurance_policy_number,
-      ),
+      ...custom,
+      owner_name: custom.owner_name
+        ? maskName(custom.owner_name)
+        : custom.owner_name,
+
+      vehicle_number: custom.vehicle_number,
+
+      engine: custom.engine ? maskAlphaNumeric(custom.engine) : custom.engine,
+
+      chassis_number: custom.chassis_number
+        ? maskAlphaNumeric(custom.chassis_number)
+        : custom.chassis_number,
+
+      insurance_policy_number: custom.insurance_policy_number
+        ? maskAlphaNumeric(custom.insurance_policy_number)
+        : custom.insurance_policy_number,
     },
 
     rto_data: {
-      ...data.rto_data,
+      ...rto,
 
-      registration: {
-        ...data.rto_data.registration,
-        number: maskVehicleNumber(data.rto_data.registration.number),
-        owner: {
-          ...data.rto_data.registration.owner,
-          name: maskName(data.rto_data.registration.owner.name),
-          fatherName: maskName(data.rto_data.registration.owner.fatherName),
-          presentAddress: "******",
-          permanentAddress: "******",
-        },
-      },
+      registration: rto.registration
+        ? {
+            ...rto.registration,
+            number: rto.registration.number
+              ? maskVehicleNumber(rto.registration.number)
+              : rto.registration.number,
 
-      vehicle: {
-        ...data.rto_data.vehicle,
-        engine: maskAlphaNumeric(data.rto_data.vehicle.engine),
-        chassis: maskAlphaNumeric(data.rto_data.vehicle.chassis),
-      },
+            owner: rto.registration.owner
+              ? {
+                  ...rto.registration.owner,
+                  name: rto.registration.owner.name
+                    ? maskName(rto.registration.owner.name)
+                    : rto.registration.owner.name,
 
-      insurance: {
-        ...data.rto_data.insurance,
-        policyNumber: maskAlphaNumeric(data.rto_data.insurance.policyNumber),
-      },
+                  fatherName: rto.registration.owner.fatherName
+                    ? maskName(rto.registration.owner.fatherName)
+                    : rto.registration.owner.fatherName,
 
-      pollutionControl: {
-        ...data.rto_data.pollutionControl,
-        certificateNumber: maskAlphaNumeric(
-          data.rto_data.pollutionControl.certificateNumber,
-        ),
-      },
+                  presentAddress: "******",
+                  permanentAddress: "******",
+                }
+              : rto.registration.owner,
+          }
+        : rto.registration,
+
+      vehicle: rto.vehicle
+        ? {
+            ...rto.vehicle,
+            engine: rto.vehicle.engine
+              ? maskAlphaNumeric(rto.vehicle.engine)
+              : rto.vehicle.engine,
+
+            chassis: rto.vehicle.chassis
+              ? maskAlphaNumeric(rto.vehicle.chassis)
+              : rto.vehicle.chassis,
+          }
+        : rto.vehicle,
+
+      insurance: rto.insurance
+        ? {
+            ...rto.insurance,
+            policyNumber: rto.insurance.policyNumber
+              ? maskAlphaNumeric(rto.insurance.policyNumber)
+              : rto.insurance.policyNumber,
+          }
+        : rto.insurance,
+
+      pollutionControl: rto.pollutionControl
+        ? {
+            ...rto.pollutionControl,
+            certificateNumber: rto.pollutionControl.certificateNumber
+              ? maskAlphaNumeric(rto.pollutionControl.certificateNumber)
+              : rto.pollutionControl.certificateNumber,
+          }
+        : rto.pollutionControl,
     },
   };
 };
@@ -200,7 +210,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
-   console.log("➡️ Calling PREMIMUM RTO API");
+  console.log("➡️ Calling PREMIMUM RTO API");
   try {
     const response = await axios.post(
       process.env.RTO_PREMIMUM_API_URL,
@@ -233,7 +243,6 @@ const addVehicleInUsergarage = async (req, res) => {
   try {
     const { user_id, vehicle_number, owner_name } = req.body;
 
-    // ------------------ VALIDATION ------------------
     if (!vehicle_number || !owner_name) {
       return res.status(400).json({
         status: false,
@@ -241,24 +250,11 @@ const addVehicleInUsergarage = async (req, res) => {
       });
     }
 
-    // ------------------ FIND USER ------------------
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: ERROR_MESSAGES.USER_NOT_FOUND,
-      });
-    }
-
-    if (!user.garage) {
-      user.garage = { security_code: "", vehicles: [] };
-    }
-
-    // ------------------ DUPLICATE CHECK IN USER GARAGE ------------------
-    const alreadyExists = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_number,
-    );
+    // 1️⃣ Duplicate check (FAST)
+    const alreadyExists = await User.findOne({
+      _id: user_id,
+      "garage.vehicles.vehicle_id": vehicle_number,
+    }).select("_id");
 
     if (alreadyExists) {
       return res.status(400).json({
@@ -267,46 +263,39 @@ const addVehicleInUsergarage = async (req, res) => {
       });
     }
 
-    // ------------------ FIND IN VehicleInfoData ------------------
-    const vehicleInfoDoc = await VehicleInfoData.findOne();
-
-    if (!vehicleInfoDoc) {
-      return res.status(404).json({
-        status: false,
-        message: "Vehicle data not found in system",
-      });
-    }
-
-    const matchedVehicle = vehicleInfoDoc.vehicles.find(
-      (v) =>
-        v.vehicle_id === vehicle_number &&
-        v.api_data?.custom_vehicle_info?.owner_name?.toLowerCase().trim() ===
-          owner_name.toLowerCase().trim(),
-    );
-
-    // console.log(matchedVehicle);
+    // 2️⃣ Find vehicle in master collection (INDEXED)
+    const matchedVehicle = await VehicleInfoData.findOne({
+      vehicle_id: vehicle_number,
+      "api_data.custom_vehicle_info.owner_name": {
+        $regex: new RegExp(`^${owner_name}$`, "i"),
+      },
+    }).lean();
 
     if (!matchedVehicle) {
       return res.status(404).json({
         status: false,
-        message: "Vehicle not found or owner name does not match our records",
+        message: "Vehicle not found or owner name mismatch",
       });
     }
 
-    // ------------------ SAVE IN USER GARAGE ------------------
-    user.garage.vehicles.push({
-      vehicle_id: vehicle_number,
-      api_data: matchedVehicle.api_data,
-    });
+    // 3️⃣ Push directly (ATOMIC)
+    await User.updateOne(
+      { _id: user_id },
+      {
+        $push: {
+          "garage.vehicles": {
+            vehicle_id: vehicle_number,
+            api_data: matchedVehicle.api_data,
+          },
+        },
+      },
+    );
 
-    await user.save();
-
-    // ------------------ RESPONSE ------------------
     return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
       data: {
-        vehicle: matchedVehicle.api_data,
+        vehicle: maskVehicleResponse(matchedVehicle.api_data),
       },
     });
   } catch (error) {
@@ -380,7 +369,11 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
 
   return {
     custom_vehicle_info: {
-      owner_name: rtoData.registration?.owner?.name || "N/A",
+      owner_name:
+        rtoData.registration?.owner?.name
+          ?.trim()
+          ?.replace(/\s+/g, " ")
+          ?.toUpperCase() || "N/A",
       vehicle_number: vehicleNumber,
       vehicle_name: `${rtoData.vehicle?.manufacturer || "Unknown"} ${
         rtoData.vehicle?.model || "Model"
@@ -433,7 +426,7 @@ const getGarage = async (req, res) => {
   try {
     const { user_id } = req.params;
 
-    const user = await User.findById(user_id).select("garage");
+    const user = await User.findById(user_id).select("garage").lean();
 
     if (!user) {
       return res.status(404).json({
@@ -463,77 +456,45 @@ const getGarage = async (req, res) => {
 const removeVehicle = async (req, res) => {
   try {
     const { user_id, vehicle_number } = req.body;
-    // NOTE: vehicle_number here is actually vehicle_id
 
     if (!user_id || !vehicle_number) {
       return res.status(400).json({
         status: false,
-        error_type: "Invalid parameter",
         message: ERROR_MESSAGES.INVALID_PARAMETER,
       });
     }
 
-    let user;
+    // 🔥 Build user query dynamically
+    let userQuery = {};
 
-    // CASE 1: user_id is Mongo ObjectId
     if (mongoose.Types.ObjectId.isValid(user_id)) {
-      user = await User.findById(user_id);
+      userQuery._id = user_id;
+    } else if (user_id.includes("@")) {
+      userQuery["basic_details.email"] = user_id.toLowerCase();
+    } else {
+      userQuery["basic_details.phone_number"] = String(user_id);
     }
 
-    // CASE 2: user_id is email
-    else if (user_id.includes("@")) {
-      user = await User.findOne({
-        "basic_details.email": user_id.toLowerCase(),
-      });
-    }
-
-    // CASE 3: user_id is phone number
-    else {
-      user = await User.findOne({
-        "basic_details.phone_number": String(user_id),
-      });
-    }
-
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: ERROR_MESSAGES.USER_NOT_FOUND,
-      });
-    }
-
-    // Check if user has vehicles
-    if (
-      !user.garage ||
-      !user.garage.vehicles ||
-      user.garage.vehicles.length === 0
-    ) {
-      return res.status(404).json({
-        status: false,
-        error_type: "other",
-        message: ERROR_MESSAGES.VEHICLE_NOT_FOUND_IN_GARAGE,
-      });
-    }
-
-    console.log("Vehicles:", user.garage.vehicles);
-
-    // Find vehicle by actual location of vehicle_id (inside api_data)
-    const vehicleIndex = user.garage.vehicles.findIndex(
-      (vehicle) => vehicle.vehicle_id === vehicle_number,
+    // 🔥 Atomic pull (NO full user fetch)
+    const result = await User.updateOne(
+      {
+        ...userQuery,
+        "garage.vehicles.vehicle_id": vehicle_number, // ensure exists
+      },
+      {
+        $pull: {
+          "garage.vehicles": { vehicle_id: vehicle_number },
+        },
+      },
     );
 
-    console.log("Found index:", vehicleIndex);
-
-    if (vehicleIndex === -1) {
+    // 🚫 Nothing removed
+    if (result.modifiedCount === 0) {
       return res.status(404).json({
         status: false,
-        error_type: "other",
         message: ERROR_MESSAGES.VEHICLE_NOT_FOUND_IN_GARAGE,
       });
     }
-
-    // Remove vehicle
-    user.garage.vehicles.splice(vehicleIndex, 1);
-    await user.save();
 
     return res.status(200).json({
       status: true,
@@ -546,7 +507,6 @@ const removeVehicle = async (req, res) => {
     console.error("Remove vehicle error:", error);
     return res.status(500).json({
       status: false,
-      error_type: "other",
       message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
@@ -556,105 +516,237 @@ const RefreshVehicleData = async (req, res) => {
   try {
     const { user_id, vehicle_id } = req.body;
 
-    if (!user_id || !vehicle_id) {
+    if (!vehicle_id) {
       return res.status(400).json({
         status: false,
-        message: "user_id and vehicle_id are required",
+        message: "vehicle_id is required",
       });
     }
 
-    // 1) Find vehicle in VehicleInfoData
-    const vehicleDataDoc = await VehicleInfoData.findOne({
-      "vehicles.vehicle_id": vehicle_id,
-    });
+    // 1️⃣ FAST: Get vehicle from master (INDEXED)
+    const vehicleDoc = await VehicleInfoData.findOne({ vehicle_id }).lean();
 
-    if (!vehicleDataDoc) {
+    if (!vehicleDoc) {
       return res.status(404).json({
         status: false,
         message: "Vehicle data not found",
       });
     }
 
-    const vehicleData = vehicleDataDoc.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id,
-    );
-
-    if (!vehicleData) {
-      return res.status(404).json({
-        status: false,
-        message: "Vehicle data not found",
-      });
-    }
-
-    // 2) Check last_updated (24 hours logic)
-    const lastUpdated = new Date(vehicleData.api_data.last_updated);
+    const lastUpdated = new Date(vehicleDoc.api_data?.last_updated);
     const now = new Date();
     const diffInHours = (now - lastUpdated) / (1000 * 60 * 60);
 
+    // 2️⃣ CASE: Data already fresh (<24h)
     if (diffInHours < 24) {
+      // 🔄 Sync to user garage if needed
+      if (user_id) {
+        await User.updateOne(
+          { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
+          {
+            $set: {
+              "garage.vehicles.$.api_data": vehicleDoc.api_data,
+              "garage.vehicles.$.last_updated": vehicleDoc.last_updated,
+            },
+          },
+        );
+      }
+
       return res.status(200).json({
         status: true,
-        message: "Your vehicle data is already up to date",
-        data: vehicleData,
+        message: "Vehicle data already up to date",
+        data: vehicleDoc.api_data,
       });
     }
 
-    // 3) Fetch fresh data from RTO
+    // 3️⃣ CASE: Data stale → Fetch from RTO
     const rtoData = await fetchVehicleDataFromRTO(vehicle_id);
 
-    // 4) Transform RTO data to your schema format
     const transformedData = transformRTODataToVehicleSchema(
       rtoData,
       vehicle_id,
     );
 
-    // 5) Update VehicleInfoData collection
-    const updatedVehicle = await VehicleInfoData.findOneAndUpdate(
-      { "vehicles.vehicle_id": vehicle_id },
+    // 4️⃣ Update master vehicle doc
+    await VehicleInfoData.updateOne(
+      { vehicle_id },
       {
         $set: {
-          "vehicles.$.api_data": transformedData,
-          "vehicles.$.last_updated": new Date(),
+          api_data: transformedData,
+          last_updated: new Date(),
         },
       },
-      { new: true },
     );
 
-    // 6) Update same vehicle inside User
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
+    // 5️⃣ Sync to user garage (if user_id provided)
+    if (user_id) {
+      await User.updateOne(
+        { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
+        {
+          $set: {
+            "garage.vehicles.$.api_data": transformedData,
+            "garage.vehicles.$.last_updated": new Date(),
+          },
+        },
+      );
     }
-
-    await User.findOneAndUpdate(
-      { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
-      {
-        $set: {
-          "garage.vehicles.$.api_data": transformedData,
-          "garage.vehicles.$.last_updated": new Date(),
-        },
-      },
-      { new: true },
-    );
-
-    const refreshedVehicle = updatedVehicle.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id,
-    );
 
     return res.status(200).json({
       status: true,
       message: "Vehicle data refreshed successfully",
-      data: refreshedVehicle,
+      data: transformedData,
     });
   } catch (error) {
-    console.error("RefreshVehicleData Error:", error.message);
+    console.error("RefreshVehicleData Error:", error);
     return res.status(500).json({
       status: false,
-      message: error.message || "Failed to refresh vehicle data",
+      message: "Failed to refresh vehicle data",
+    });
+  }
+};
+
+const checkSecurityCode = async (req, res) => {
+  try {
+    const { user_id, vehicle_id } = req.body;
+
+    if (!user_id || !vehicle_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and vehicle_id are required",
+      });
+    }
+
+    // 🔥 Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user_id",
+      });
+    }
+
+    // 🔥 Only fetch required vehicle (FAST)
+    const user = await User.findOne(
+      {
+        _id: user_id,
+        "garage.vehicles.vehicle_id": vehicle_id,
+      },
+      {
+        "garage.vehicles.$": 1,
+      },
+    ).lean();
+
+    if (!user || !user.garage?.vehicles?.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle not found for this user",
+      });
+    }
+
+    const vehicle = user.garage.vehicles[0];
+
+    // 🔥 Generate secure 6 digit code
+    const securityCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 🔥 Redis key
+    const redisKey = `vehicleSecurity:${user_id}:${vehicle_id}`;
+
+    // 🔥 Save in Redis (auto expire in 10 min)
+    await redis.set(redisKey, securityCode, "EX", 600);
+
+    return res.status(200).json({
+      success: true,
+      message: "Security code generated successfully",
+      security_code: securityCode,
+      expires_in: 600,
+      vehicle_doc_data: vehicle.vehicle_doc?.documents || [],
+    });
+  } catch (error) {
+    console.error("checkSecurityCode Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+const verifySecurityCode = async (req, res) => {
+  try {
+    const { user_id, vehicle_id, security_code } = req.body;
+
+    // ✅ Validate input
+    if (!user_id || !vehicle_id || !security_code) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id, vehicle_id and security_code are required",
+      });
+    }
+
+    // ✅ Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user_id",
+      });
+    }
+
+    // ✅ Get security code from Redis
+    const redisKey = `vehicleSecurity:${user_id}:${vehicle_id}`;
+
+    const savedCode = await redis.get(redisKey);
+
+    if (!savedCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Security code expired or not generated",
+      });
+    }
+
+    // ✅ Compare code
+    if (savedCode !== security_code) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid security code",
+      });
+    }
+
+    // ✅ Fetch ONLY required vehicle documents (FAST query)
+    const user = await User.findOne(
+      {
+        _id: user_id,
+        "garage.vehicles.vehicle_id": vehicle_id,
+      },
+      {
+        "garage.vehicles.$": 1,
+      },
+    ).lean();
+
+    if (!user || !user.garage?.vehicles?.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle not found",
+      });
+    }
+
+    const vehicle = user.garage.vehicles[0];
+
+    // ✅ OPTIONAL: delete code after success (one-time use)
+    await redis.del(redisKey);
+
+    return res.status(200).json({
+      success: true,
+      message: "Security code verified successfully",
+      data: {
+        vehicle_id,
+        documents: vehicle.vehicle_doc?.documents || [],
+      },
+    });
+  } catch (error) {
+    console.error("verifySecurityCode Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
@@ -665,4 +757,6 @@ module.exports = {
   RefreshVehicleData,
   getGarage,
   removeVehicle,
+  checkSecurityCode,
+  verifySecurityCode
 };
