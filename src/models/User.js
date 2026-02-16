@@ -328,18 +328,5 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.basic_details.password);
 };
 
-// Generate JWT token
-userSchema.methods.generateAuthToken = function () {
-  const jwt = require("jsonwebtoken");
-  return jwt.sign(
-    {
-      userId: this._id,
-      email: this.basic_details.email,
-      phone: this.basic_details.phone_number,
-    },
-    process.env.JWT_SECRET || "your-secret-key",
-    { expiresIn: "7d" },
-  );
-};
 
 module.exports = mongoose.model("User", userSchema);

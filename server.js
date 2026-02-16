@@ -12,6 +12,7 @@ const startDeletionCron = require("./src/utils/cronJobs.js");
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
+const AdminauthRoutes = require("./src/routes/admin.routes.js");
 const appInfoRoutes = require("./src/routes/appInfo.routes.js");
 const fuelRoutes = require("./src/routes/fuel.routes.js");
 const uploadRoutes = require("./src/routes/upload.routes.js");
@@ -80,6 +81,7 @@ app.use(notificationImageRoutes);
 // -------------------- ROUTES --------------------
 
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
+app.use(API_ROUTES.AUTH.BASE, AdminauthRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
 app.use(API_ROUTES.EMERGENCY_CONTACT.BASE, emergencyContactRoutes);

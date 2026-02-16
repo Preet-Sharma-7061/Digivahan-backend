@@ -16,6 +16,8 @@ const {
 
 const { ERROR_MESSAGES, SUCCESS_MESSAGES } = require("../../constants");
 
+const { generateAuthToken } = require("../middleware/auth.js");
+
 /**
  * Register Init - Step 1: Check user existence or collect user details and send OTP
  * POST /api/auth/register/init
@@ -70,7 +72,7 @@ const registerInit = async (req, res) => {
     }
 
     // 🔐 Generate
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const userRegisterId = generateTempUserId();
 
     // ✅ 1️⃣ Save OTP separately (for verify API)
@@ -252,7 +254,11 @@ const verifyOtp = async (req, res) => {
       is_active: true,
     });
 
-    const token = newUser.generateAuthToken();
+    const token = generateAuthToken({
+      user_id: newUser._id,
+      email: newUser.basic_details.email,
+      phone_number: newUser.basic_details.phone_number,
+    });
 
     // 🔥 Clean Redis in parallel
     await Promise.all([
@@ -398,7 +404,11 @@ const signIn = async (req, res) => {
     // 🔥 Update login status (no full save)
     await User.updateOne({ _id: user._id }, { $set: { is_logged_in: true } });
 
-    const token = user.generateAuthToken();
+    const token = generateAuthToken({
+      user_id: user._id,
+      email: user.basic_details.email,
+      phone_number: user.basic_details.phone_number,
+    });
 
     return res.status(200).json({
       status: true,
@@ -494,7 +504,7 @@ const resendOtp = async (req, res) => {
     }
 
     // 🔥 Generate new OTP
-    const newOtpCode = generateOTP(6);
+    const newOtpCode = generateOTP(4);
 
     // 🔥 Update OTP + set cooldown in parallel
     await Promise.all([
@@ -803,7 +813,7 @@ const otpBasedLogin = async (req, res) => {
     }
 
     // 🔥 Generate OTP
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const otpChannel = login_via.toUpperCase();
 
     const redisKey = `loginOtp:${identifier}`;
@@ -935,7 +945,11 @@ const verifyLoginOtp = async (req, res) => {
     // 🔥 Delete OTP from Redis
     await redis.del(redisKey);
 
-    const token = user.generateAuthToken();
+    const token = generateAuthToken({
+      user_id: user._id,
+      email: user.basic_details.email,
+      phone_number: user.basic_details.phone_number,
+    });
 
     return res.status(200).json({
       status: true,
@@ -1053,7 +1067,7 @@ const requestResetPassword = async (req, res) => {
     }
 
     // 🔥 Generate OTP
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
 
     const redisKey = `resetOtp:${identifier}`;
 
@@ -1203,7 +1217,11 @@ const verifyResetOtp = async (req, res) => {
 
     await user.save();
 
-    const token = user.generateAuthToken();
+    const token = generateAuthToken({
+      user_id: user._id,
+      email: user.basic_details.email,
+      phone_number: user.basic_details.phone_number,
+    });
 
     await redis.del(redisKey);
 
@@ -1313,7 +1331,7 @@ const verifyRequest = async (req, res) => {
     }
 
     // 🔥 Generate OTP & verification id
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const verificationId = generateVerificationId();
 
     const redisKey = `verifyOtp:${verificationId}`;
@@ -1505,7 +1523,7 @@ const RequestPrimaryContact = async (req, res) => {
     }
 
     // 🔥 Generate OTP
-    const otp = generateOTP(6);
+    const otp = generateOTP(4);
 
     // 🔥 Redis key
     const redisKey = `primaryOtp:${user_id}`;
@@ -1795,7 +1813,7 @@ const removeUserSuspension = async (req, res) => {
       {
         new: true,
         select: "_id",
-      }
+      },
     );
 
     if (!user) {
@@ -1817,7 +1835,6 @@ const removeUserSuspension = async (req, res) => {
     });
   }
 };
-
 
 const MAX_DAILY_OTP = 3;
 

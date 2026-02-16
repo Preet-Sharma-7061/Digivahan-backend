@@ -61,6 +61,11 @@ const API_ROUTES = {
       SUSPEND: "/suspend-user",
       REMOVE_SUSPENSION: "/remove-suspension",
     },
+
+    ADMIN: {
+      SIGN_IN_ADMIN: "/admin/send-otp",
+      VERIFY_ADMIN: "/admin/verify-admin",
+    },
   },
 
   // Device routes

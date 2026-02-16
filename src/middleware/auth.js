@@ -116,7 +116,32 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+const generateAuthToken = (payloadData) => {
+  try {
+    if (!payloadData || !payloadData.user_id) {
+      throw new Error("user_id is required to generate token");
+    }
+
+    const payload = {
+      user_id: payloadData.user_id,
+      email: payloadData.email || null,
+      phone_number: payloadData.phone_number || null,
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "7d", // token validity
+      issuer: "digivahan",
+    });
+
+    return token;
+  } catch (error) {
+    console.error("Token generation error:", error.message);
+    throw error;
+  }
+};
+
 module.exports = {
+  generateAuthToken,
   authenticateToken,
   optionalAuth,
 };
