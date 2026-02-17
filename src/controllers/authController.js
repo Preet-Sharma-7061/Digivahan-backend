@@ -266,10 +266,38 @@ const verifyOtp = async (req, res) => {
       redis.del(`tempUser:${user_register_id}`),
     ]);
 
+    const userResponse = {
+      basic_details: {
+        profile_pic: newUser.basic_details.profile_pic,
+        first_name: newUser.basic_details.first_name,
+        last_name: newUser.basic_details.last_name,
+        phone_number: newUser.basic_details.phone_number,
+        phone_number_verified: newUser.basic_details.phone_number_verified,
+        is_phone_number_primary: newUser.basic_details.is_phone_number_primary,
+        email: newUser.basic_details.email,
+        is_email_verified: newUser.basic_details.is_email_verified,
+        is_email_primary: newUser.basic_details.is_email_primary,
+        password: "", // Never send password
+        occupation: newUser.basic_details.occupation,
+        profile_completion_percent:
+          newUser.basic_details.profile_completion_percent,
+      },
+      public_details: {
+        nick_name: newUser.public_details.nick_name,
+        address: newUser.public_details.address,
+        age: newUser.public_details.age,
+        gender: newUser.public_details.gender,
+        public_pic: newUser.public_details.public_pic,
+      },
+      is_tracking_on: newUser.is_tracking_on,
+      is_notification_sound_on: newUser.is_notification_sound_on,
+      token: token,
+    };
+
     return res.status(200).json({
       status: true,
       message: "OTP verified. Account created successfully.",
-      token,
+      user: userResponse,
     });
   } catch (error) {
     console.error("Verify OTP error:", error);
