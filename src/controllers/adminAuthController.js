@@ -1,4 +1,6 @@
 const Admin = require("../models/admin.model");
+const jwt = require("jsonwebtoken");
+const RevokedToken = require("../models/revokedTokenSchema");
 const redis = require("../utils/redis");
 const { generateOTP, sendOTP } = require("../utils/otpUtils");
 const { generateAuthToken } = require("../middleware/auth");
@@ -118,7 +120,7 @@ const verifyAdminOTP = async (req, res) => {
        3️⃣ Get OTP from Redis
     =============================== */
 
-     const redisKey = `admin:otp:${phone}`;
+    const redisKey = `admin:otp:${phone}`;
 
     const storedOTP = await redis.get(redisKey);
 
@@ -194,4 +196,41 @@ const verifyAdminOTP = async (req, res) => {
   }
 };
 
-module.exports = { SignInAdmin, verifyAdminOTP };
+const LogoutAdmin = async (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
+
+    if (!token) {
+      return res.status(401).json({
+        status: false,
+        message: "Access token required",
+      });
+    }
+
+    // 1️⃣ Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 2️⃣ Convert exp (seconds) → Date
+    const expiryDate = new Date(decoded.exp * 1000);
+
+    // 3️⃣ Save revoked token
+    await RevokedToken.create({
+      token: token,
+      date: expiryDate,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Logout successful",
+    });
+  } catch (error) {
+    return res.status(401).json({
+      status: false,
+      message: "Invalid or expired token",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = { SignInAdmin, verifyAdminOTP, LogoutAdmin };

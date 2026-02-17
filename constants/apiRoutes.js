@@ -64,6 +64,7 @@ const API_ROUTES = {
 
     ADMIN: {
       SIGN_IN_ADMIN: "/admin/send-otp",
+      LOGOUT_ADMIN: "/admin/logout-admin",
       VERIFY_ADMIN: "/admin/verify-admin",
     },
   },

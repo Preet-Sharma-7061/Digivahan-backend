@@ -5,11 +5,14 @@ const {
   commonValidations,
 } = require("../middleware/validation.js");
 
+const { authenticateTokenForAdmin } = require("../middleware/auth.js");
+
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 const {
   SignInAdmin,
   verifyAdminOTP,
+  LogoutAdmin,
 } = require("../controllers/adminAuthController.js");
 
 router.post(
@@ -22,6 +25,13 @@ router.post(
   API_ROUTES.AUTH.ADMIN.VERIFY_ADMIN,
   [handleValidationErrors],
   verifyAdminOTP,
+);
+
+router.post(
+  API_ROUTES.AUTH.ADMIN.LOGOUT_ADMIN,
+  authenticateTokenForAdmin,
+  [handleValidationErrors],
+  LogoutAdmin,
 );
 
 module.exports = router;
