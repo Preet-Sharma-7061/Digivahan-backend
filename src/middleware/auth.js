@@ -92,7 +92,7 @@ const generateAuthToken = (payloadData) => {
     }
 
     const payload = {
-      user_id: payloadData.user_id,
+      userId: payloadData.user_id,
       email: payloadData.email || null,
       phone_number: payloadData.phone_number || null,
     };
@@ -134,7 +134,7 @@ const authenticateTokenForAdmin = async (req, res, next) => {
       token,
       process.env.JWT_SECRET || "your-secret-key",
     );
-    const admin = await Admin.findById(decoded.user_id);
+    const admin = await Admin.findById(decoded.userId);
 
     if (!admin) {
       return res.status(401).json({
