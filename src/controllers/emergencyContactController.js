@@ -1,7 +1,6 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
-const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
 const mongoose = require("mongoose");
 
 const AddEmergencyContact = async (req, res) => {
@@ -97,10 +96,6 @@ const AddEmergencyContact = async (req, res) => {
       profile_pic,
       public_id,
     });
-
-    // 🔥 Recalculate profile completion
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
 
     await user.save();
 
@@ -238,10 +233,6 @@ const UpdateUserEmergencyContact = async (req, res) => {
 
     if (email !== undefined) contact.email = email.trim().toLowerCase();
 
-    // 🔥 Recalculate profile completion
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
-
     await user.save();
 
     return res.status(200).json({
@@ -281,7 +272,7 @@ const DeleteUserEmergencyContact = async (req, res) => {
 
     // 🔥 Fetch only required fields
     const user = await User.findById(user_id).select(
-      "emergency_contacts basic_details.profile_completion_percent",
+      "basic_details public_details emergency_contacts",
     );
 
     if (!user) {
@@ -304,10 +295,6 @@ const DeleteUserEmergencyContact = async (req, res) => {
 
     // 🔥 Remove contact using mongoose built-in method
     contact.deleteOne();
-
-    // 🔥 Recalculate profile completion
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
 
     await user.save();
 
