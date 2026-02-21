@@ -1,7 +1,6 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
-const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
 const mongoose = require("mongoose");
 
 const UpdateUserDetails = async (req, res) => {
@@ -99,10 +98,6 @@ const UpdateUserDetails = async (req, res) => {
 
     if (body.gender)
       user.public_details.gender = body.gender;
-
-    // 🔥 Recalculate profile completion
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
 
     await user.save();
 
