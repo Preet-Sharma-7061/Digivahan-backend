@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
 
 const addressSchema = new mongoose.Schema(
   {
@@ -320,6 +321,19 @@ userSchema.pre("save", async function (next) {
 // Update updated_at field before saving
 userSchema.pre("save", function (next) {
   this.updated_at = Date.now();
+  next();
+});
+
+userSchema.pre("save", function (next) {
+  if (
+    this.isModified("basic_details") ||
+    this.isModified("public_details") ||
+    this.isModified("emergency_contacts")
+  ) {
+    this.basic_details.profile_completion_percent =
+      calculateProfileCompletion(this);
+  }
+
   next();
 });
 
