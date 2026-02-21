@@ -2,7 +2,7 @@ const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
 const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
 const AddEmergencyContact = async (req, res) => {
   try {
@@ -25,7 +25,7 @@ const AddEmergencyContact = async (req, res) => {
 
     // 🔥 Fetch only required fields
     const user = await User.findById(user_id).select(
-      "basic_details.phone_number emergency_contacts basic_details.profile_completion_percent",
+      "basic_details public_details emergency_contacts",
     );
 
     if (!user) {
@@ -149,7 +149,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
 
     // 🔥 Fetch only required fields
     const user = await User.findById(user_id).select(
-      "basic_details.phone_number emergency_contacts basic_details.profile_completion_percent",
+      "basic_details public_details emergency_contacts",
     );
 
     if (!user) {
