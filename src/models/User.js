@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
 
 const addressSchema = new mongoose.Schema(
   {
@@ -297,8 +298,6 @@ userSchema.index({ "address_book.contact_no": 1 });
 userSchema.index({ qr_list: 1 });
 vehicleSchema.index({ qr_list: 1 });
 
-
-
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("basic_details.password")) {
@@ -323,10 +322,22 @@ userSchema.pre("save", function (next) {
   next();
 });
 
+userSchema.pre("save", function (next) {
+  if (
+    this.isModified("basic_details") ||
+    this.isModified("public_details") ||
+    this.isModified("emergency_contacts")
+  ) {
+    this.basic_details.profile_completion_percent =
+      calculateProfileCompletion(this);
+  }
+
+  next();
+});
+
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.basic_details.password);
 };
-
 
 module.exports = mongoose.model("User", userSchema);

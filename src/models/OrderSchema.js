@@ -2,127 +2,35 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 /* ----------------------------------
-   ORDER ITEM SCHEMA
+   ORDER ITEM
 -----------------------------------*/
 const orderItemSchema = new Schema(
   {
-    vehicle_id: {
-      type: String,
-      index: true,
-    },
+    vehicle_id: String,
 
     order_type: {
       type: String,
-      index: true,
+      enum: ["Prepaid", "COD"],
+      default: "Prepaid",
     },
 
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+    name: String,
 
     sku: {
       type: String,
       default: "QR-001",
-      index: true,
     },
 
-    units: {
-      type: Number,
-      required: true,
-      min: 1,
-    },
+    units: Number,
 
-    selling_price: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
+    selling_price: Number,
 
     selling_price_currency: {
       type: String,
       default: "INR",
     },
 
-    weight: {
-      type: Number,
-      default: 0.05,
-      min: 0,
-    },
-  },
-  { _id: false },
-);
-
-/* ----------------------------------
-   SHIPROCKET SCHEMA
------------------------------------*/
-const shiprocketStatusSchema = new Schema(
-  {
-    order_id: {
-      type: String,
-      index: true,
-    },
-
-    channel_order_id: {
-      type: String,
-      index: true,
-    },
-
-    shipment_id: {
-      type: Number,
-      index: true,
-    },
-
-    status: {
-      type: String,
-      index: true,
-    },
-
-    status_code: {
-      type: Number,
-      default: 5,
-      index: true,
-    },
-
-    awb_code: {
-      type: String,
-    },
-
-    courier_company_id: {
-      type: Number,
-      index: true,
-    },
-
-    courier_name: {
-      type: String,
-      index: true,
-    },
-
-    new_channel: {
-      type: Boolean,
-      default: false,
-    },
-
-    packaging_box_error: {
-      type: String,
-    },
-
-    manifest_url: {
-      type: String,
-      index: true,
-    },
-
-    manifest_generated_at: Date,
-
-    label_url: {
-      type: String,
-      index: true,
-    },
-
-    label_generated_at: Date,
-    tracking_data: mongoose.Schema.Types.Mixed,
+    weight: Number,
   },
   { _id: false },
 );
@@ -142,31 +50,11 @@ const orderSchema = new Schema(
     order_id: {
       type: String,
       required: true,
-      unique: true,
-      index: true,
     },
 
     order_date: {
       type: Date,
       default: Date.now,
-      index: true,
-    },
-
-    sub_total: {
-      type: Number,
-      required: true,
-      index: true,
-    },
-
-    order_value: {
-      type: Number,
-      required: true,
-      index: true,
-    },
-
-    declared_value: {
-      type: Number,
-      required: true,
     },
 
     order_status: {
@@ -180,22 +68,40 @@ const orderSchema = new Schema(
         "CANCELED",
         "RETURNED",
         "PICKUP SCHEDULED",
+        "PICKED UP",
+        "IN_TRANSIT"
       ],
       default: "NEW",
+    },
+
+    canceled_at: Date,
+
+    active_partner: {
+      type: String,
+      enum: ["shiprocket", "delivery", "manual"],
+      required: true,
       index: true,
+    },
+
+    partner_order_created: {
+      type: Boolean,
+      default: false,
+    },
+
+    shipping_mode: {
+      type: String,
+      default: "Surface",
     },
 
     payment_method: {
       type: String,
       enum: ["Prepaid", "COD"],
       default: "Prepaid",
-      index: true,
     },
 
     is_prepared: {
       type: Boolean,
       default: false,
-      index: true,
     },
 
     shipping_is_billing: {
@@ -206,44 +112,36 @@ const orderSchema = new Schema(
     is_return: {
       type: Boolean,
       default: false,
+    },
+
+    sub_total: Number,
+
+    order_value: Number,
+
+    declared_value: Number,
+
+    courier_company_id: {
+      type: Number,
       index: true,
     },
 
-    /* -----------------
-       SHIPPING INFO
-    ------------------*/
+    courier_name: {
+      type: String,
+      index: true,
+    },
 
     shipping: {
       first_name: String,
       last_name: String,
-      phone: {
-        type: String,
-        index: true,
-      },
-      email: {
-        type: String,
-        index: true,
-      },
+      phone: String,
+      email: String,
       address1: String,
       address2: String,
-      city: {
-        type: String,
-        index: true,
-      },
-      state: {
-        type: String,
-        index: true,
-      },
+      city: String,
+      state: String,
       country: String,
-      pincode: {
-        type: String,
-        index: true,
-      },
+      pincode: String,
     },
-
-    /* -----------------
-       BILLING INFO
-    ------------------*/
 
     billing: {
       first_name: String,
@@ -257,10 +155,6 @@ const orderSchema = new Schema(
       pincode: String,
     },
 
-    /* -----------------
-       PARCEL
-    ------------------*/
-
     parcel: {
       length: Number,
       breadth: Number,
@@ -268,47 +162,33 @@ const orderSchema = new Schema(
       weight: Number,
     },
 
-    /* -----------------
-       ITEMS ARRAY
-    ------------------*/
-
     order_items: {
       type: [orderItemSchema],
       required: true,
-      index: true,
     },
-
-    /* -----------------
-       SHIPROCKET
-    ------------------*/
-
-    ship_rocket: shiprocketStatusSchema,
-    last_tracked_at: {
-      type: Date,
-      index: true,
-    },
-
-    awb_data: Schema.Types.Mixed,
+    last_tracked_at: Date,
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-/* ----------------------------------
-   COMPOUND INDEXES (CRITICAL)
------------------------------------*/
+orderSchema.index({ order_id: 1 });
 
-// fetch user's orders fast
 orderSchema.index({ user_id: 1, createdAt: -1 });
 
-// dashboard queries
 orderSchema.index({ order_status: 1, createdAt: -1 });
 
-// shiprocket tracking
-orderSchema.index({ "ship_rocket.awb_code": 1 });
+orderSchema.index({ active_partner: 1, createdAt: -1 });
 
-// search
+orderSchema.index({ courier_company_id: 1, createdAt: -1 });
+
+orderSchema.index({ partner_order_created: 1, order_status: 1 });
+
+orderSchema.index({ "shipping.phone": 1 });
+
+orderSchema.index({ "shipping.pincode": 1 });
+
+orderSchema.index({ createdAt: -1 });
+
 orderSchema.index({ order_id: 1, user_id: 1 });
 
 module.exports = mongoose.model("Order", orderSchema);

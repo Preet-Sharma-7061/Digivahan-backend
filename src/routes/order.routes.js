@@ -11,16 +11,18 @@ const {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
   GenerateOrderManifest,
-  GenerateLable,
+  GenerateShiprocketLabel,
+  GenerateDeliveryLabel,
   getUserAllOrder,
   findSingleOrderData,
-  checkCouierService,
   GetAllNewOrderListToAdmin,
   findOrderByAdminThrowOrderId,
   findOrderByAdminThrowUserId,
   TrackOrderwithOrderId,
   OrderCancelByAdmin,
   OrderCancelByUser,
+  CheckCourierService,
+  AddNewActivePatner,
 } = require("../controllers/OrderController.js");
 
 router.post(
@@ -42,9 +44,15 @@ router.get(
 );
 
 router.get(
-  API_ROUTES.ORDER.ADMIN_GENERATE_LABEL,
+  API_ROUTES.ORDER.ADMIN_GENERATE_SHIPROCKET_LABEL,
   [handleValidationErrors],
-  GenerateLable,
+  GenerateShiprocketLabel,
+);
+
+router.get(
+  API_ROUTES.ORDER.ADMIN_GENERATE_DELIVERY_LABEL,
+  [handleValidationErrors],
+  GenerateDeliveryLabel,
 );
 
 router.post(
@@ -64,12 +72,12 @@ router.post(
 );
 
 router.post(
-  API_ROUTES.ORDER.CHECK_COURIER,
+  API_ROUTES.ORDER.CHECK_COURIER_SERVICE,
   [
     commonValidations.validateDeliveryPostcode("delivery_postcode"),
     handleValidationErrors,
   ],
-  checkCouierService,
+  CheckCourierService,
 );
 
 router.get(
@@ -110,6 +118,12 @@ router.post(
   API_ROUTES.ORDER.TRACK_ORDER_STATUS,
   [commonValidations.userId("user_id"), handleValidationErrors],
   TrackOrderwithOrderId,
+);
+
+router.post(
+  API_ROUTES.ORDER.ADD_ACTIVE_PARTNER,
+  [handleValidationErrors],
+  AddNewActivePatner,
 );
 
 module.exports = router;

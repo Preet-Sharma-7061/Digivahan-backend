@@ -1,107 +1,162 @@
 const mongoose = require("mongoose");
 const axios = require("axios");
 const User = require("../models/User");
+const Admin = require("../models/admin.model");
+const AdminConfig = require("../models/adminConfigSchema");
 const Order = require("../models/OrderSchema");
-
+const ShiprocketOrder = require("../models/ShiprocketSchema");
+const DeliveryOrder = require("../models/DeliverySchema");
+const getISTDateTime = require("../middleware/generateISTDateTime");
+const qs = require("qs");
 
 // ------------------------------
 // Generate Order Controller
 // ------------------------------
 const GenerateOrderByUser = async (req, res) => {
   try {
-    const user = await User.findById(req.body.user_id);
+    const {
+      user_id,
+      order_id,
+      active_partner,
+      payment_method,
+      shipping_mode,
+      sub_total,
+      order_value,
+      declared_value,
+      shipping_is_billing,
+      shipping,
+      billing,
+      parcel,
+      order_items,
+    } = req.body;
 
-    if (!user)
+    const user = await User.findById(user_id);
+
+    if (!user) {
       return res.status(404).json({
         status: false,
         message: "User not found",
       });
+    }
 
     const order = await Order.create({
       user_id: user._id,
 
-      order_id: req.body.order_id,
+      order_id: order_id,
 
-      sub_total: req.body.sub_total,
+      active_partner: active_partner,
 
-      order_value: req.body.order_value,
+      payment_method: payment_method,
 
-      declared_value: req.body.declared_value,
+      shipping_mode: shipping_mode || "Surface",
+
+      sub_total: sub_total,
+
+      order_value: order_value,
+
+      declared_value: declared_value,
+
+      shipping_is_billing: shipping_is_billing,
+
+      courier_company_id: req.body.courier_company_id, // ✅ ADD THIS
+
+      courier_name: req.body.courier_name,
 
       shipping: {
-        first_name: req.body.shipping_customer_name,
-        last_name: req.body.shipping_last_name,
-        phone: req.body.shipping_phone,
-        email: req.body.shipping_email,
-        address1: req.body.shipping_address,
-        address2: req.body.shipping_address_2,
-        city: req.body.shipping_city,
-        state: req.body.shipping_state,
-        country: req.body.shipping_country,
-        pincode: req.body.shipping_pincode,
+        first_name: shipping.first_name,
+
+        last_name: shipping.last_name,
+
+        phone: shipping.phone,
+
+        email: shipping.email,
+
+        address1: shipping.address1,
+
+        address2: shipping.address2,
+
+        city: shipping.city,
+
+        state: shipping.state,
+
+        country: shipping.country,
+
+        pincode: shipping.pincode,
       },
 
       billing: {
-        first_name: req.body.billing_customer_name,
-        last_name: req.body.billing_last_name,
-        phone: req.body.billing_phone,
-        address1: req.body.billing_address,
-        address2: req.body.billing_address_2,
-        city: req.body.billing_city,
-        state: req.body.billing_state,
-        country: req.body.billing_country,
-        pincode: req.body.billing_pincode,
+        first_name: billing.first_name,
+
+        last_name: billing.last_name,
+
+        phone: billing.phone,
+
+        address1: billing.address1,
+
+        address2: billing.address2,
+
+        city: billing.city,
+
+        state: billing.state,
+
+        country: billing.country,
+
+        pincode: billing.pincode,
       },
 
       parcel: {
-        length: req.body.length,
-        breadth: req.body.breadth,
-        height: req.body.height,
-        weight: req.body.weight,
+        length: parcel.length,
+
+        breadth: parcel.breadth,
+
+        height: parcel.height,
+
+        weight: parcel.weight,
       },
 
-      order_items: [
-        {
-          vehicle_id: req.body.vehicle_id,
-          order_type: req.body.order_type,
-          name: req.body.name,
-          sku: req.body.sku,
-          units: req.body.units,
-          selling_price: req.body.selling_price,
-        },
-      ],
+      order_items: order_items.map((item) => ({
+        vehicle_id: item.vehicle_id,
 
-      ship_rocket: {
-        channel_order_id: req.body.order_id,
-        courier_company_id: req.body.courier_company_id,
-        courier_name: req.body.courier_name,
-      },
+        order_type: item.order_type,
+
+        name: item.name,
+
+        sku: item.sku,
+
+        units: item.units,
+
+        selling_price: item.selling_price,
+
+        selling_price_currency: item.selling_price_currency,
+
+        weight: item.weight,
+      })),
     });
 
     await User.findByIdAndUpdate(user._id, {
       $push: { my_orders: order._id },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       status: true,
-      message: "Order created",
+
+      message: "Order created successfully",
+
       data: order,
     });
   } catch (err) {
-    res.status(500).json({
+    console.error(err);
+
+    return res.status(500).json({
       status: false,
+
       message: err.message,
     });
   }
 };
 
-// Order confirm By admin
 const ConfirmOrderByAdmin = async (req, res) => {
-  // const session = await mongoose.startSession();
-
   try {
-    // session.startTransaction();
-
     const { order_id } = req.body;
 
     if (!order_id)
@@ -110,229 +165,335 @@ const ConfirmOrderByAdmin = async (req, res) => {
         message: "order_id required",
       });
 
-    // STEP 1: Fetch Order
-    // const order = await Order.findById(order_id).session(session);
+    /* ----------------------------------------
+       STEP 1: FETCH ORDER
+    ---------------------------------------- */
+
     const order = await Order.findById(order_id);
 
-    if (!order) {
-      // await session.abortTransaction();
+    if (!order)
       return res.status(404).json({
         status: false,
         message: "Order not found",
       });
-    }
 
-    // STEP 2: Prevent duplicate processing
-    if (order.ship_rocket?.shipment_id) {
-      // await session.abortTransaction();
+    /* ----------------------------------------
+       STEP 2: PREVENT DUPLICATE CREATION
+    ---------------------------------------- */
 
+    if (order.partner_order_created)
       return res.status(400).json({
         status: false,
-        message: "Shiprocket already created for this order",
+        message: "Partner order already created",
       });
-    }
 
-    if (order.order_status !== "NEW") {
-      // await session.abortTransaction();
+    /* ----------------------------------------
+       STEP 3: CHECK ACTIVE PARTNER
+    ---------------------------------------- */
 
-      return res.status(400).json({
-        status: false,
-        message: `Order already ${order.order_status}`,
+    if (order.active_partner === "shiprocket") {
+      /* ----------------------------------------
+         BUILD SHIPROCKET PAYLOAD
+      ---------------------------------------- */
+
+      const orderItemsPayload = order.order_items.map((item) => ({
+        name: item.name,
+        sku: item.sku,
+        units: item.units,
+        selling_price: item.selling_price,
+        selling_price_currency: item.selling_price_currency,
+        weight: item.weight,
+      }));
+
+      orderItemsPayload.push({
+        name: "Delivery Charges",
+        sku: "SHIP-001",
+        units: 1,
+        selling_price: order.sub_total,
+        selling_price_currency: "INR",
       });
+
+      const shiprocketPayload = {
+        order_id: order.order_id,
+
+        order_date: order.order_date,
+
+        sub_total: order.sub_total,
+
+        order_value: order.order_value,
+
+        payment_method: order.payment_method,
+
+        is_prepared: order.is_prepared,
+
+        shipping_is_billing: order.shipping_is_billing,
+
+        is_return: order.is_return,
+
+        declared_value: order.declared_value,
+
+        shipping_customer_name: order.shipping.first_name,
+
+        shipping_last_name: order.shipping.last_name,
+
+        shipping_phone: order.shipping.phone,
+
+        shipping_address: order.shipping.address1,
+
+        shipping_address_2: order.shipping.address2,
+
+        shipping_city: order.shipping.city,
+
+        shipping_state: order.shipping.state,
+
+        shipping_country: order.shipping.country,
+
+        shipping_pincode: order.shipping.pincode,
+
+        shipping_email: order.shipping.email,
+
+        billing_customer_name: order.billing.first_name,
+
+        billing_last_name: order.billing.last_name,
+
+        billing_phone: order.billing.phone,
+
+        billing_address: order.billing.address1,
+
+        billing_address_2: order.billing.address2,
+
+        billing_city: order.billing.city,
+
+        billing_state: order.billing.state,
+
+        billing_country: order.billing.country,
+
+        billing_pincode: order.billing.pincode,
+
+        length: order.parcel.length,
+
+        breadth: order.parcel.breadth,
+
+        height: order.parcel.height,
+
+        weight: order.parcel.weight,
+
+        order_items: orderItemsPayload,
+      };
+
+      /* ----------------------------------------
+         CREATE SHIPROCKET ORDER
+      ---------------------------------------- */
+
+      const response = await createShiprocketOrder(shiprocketPayload);
+
+      if (!response?.shipment_id)
+        throw new Error("Shiprocket order creation failed");
+
+      const AWBpayload = {
+        shipment_id: response.shipment_id,
+        courier_company_id: order.courier_company_id,
+      };
+
+      const awbResponse = await GenerateAWBShipment(AWBpayload);
+
+      if (!awbResponse?.response?.data?.awb_code) {
+        throw new Error("AWB generation failed");
+      }
+
+      /* ------------------------------------------------
+       STEP 6: GENERATE PICKUP 
+       ------------------------------------------------ */
+      const pickupResponse = await GenerateShiprocketPickUp([
+        response.shipment_id,
+      ]);
+
+      /* ----------------------------------------
+         SAVE INTO ShiprocketOrder COLLECTION
+      ---------------------------------------- */
+
+      await ShiprocketOrder.create({
+        order_id: order._id,
+
+        channel_order_id: order.order_id,
+
+        shiprocket_order_id: response.order_id,
+
+        shipment_id: response.shipment_id,
+
+        awb_code: awbResponse.response.data.awb_code || "",
+
+        onboarding_completed_now: response.onboarding_completed_now,
+
+        courier_company_id: order.courier_company_id,
+
+        courier_name: order.courier_name,
+
+        status: response.status,
+
+        status_code: response.status_code,
+        new_channel: response.new_channel,
+        packaging_box_error: response.packaging_box_error,
+        awb_data: awbResponse,
+        pickup_data: pickupResponse,
+      });
+
+      /* ----------------------------------------
+         UPDATE ORDER COLLECTION
+      ---------------------------------------- */
+
+      order.partner_order_created = true;
+
+      order.order_status = "CONFIRMED";
+      order.is_prepared = true;
+
+      await order.save();
+    } else if (order.active_partner === "delivery") {
+      /* ----------------------------------------
+       BUILD DELIVERY PAYLOAD
+    ---------------------------------------- */
+
+      const Deliverypayload = {
+        shipments: [
+          {
+            name: `${order.shipping.first_name} ${order.shipping.last_name}`,
+
+            add: `${order.shipping.address1} ${order.shipping.address2}`,
+
+            pin: order.shipping.pincode,
+
+            city: order.shipping.city,
+
+            state: order.shipping.state,
+
+            country: order.shipping.country,
+
+            phone: order.shipping.phone,
+
+            order: order.order_id,
+
+            payment_mode: order.payment_method,
+
+            shipment_width: order.parcel.breadth?.toString() || "10",
+
+            shipment_height: order.parcel.height?.toString() || "5",
+
+            shipping_mode: order.shipping_mode || "Surface",
+          },
+        ],
+
+        pickup_location: {
+          name: "DIGIVAHAN",
+        },
+      };
+
+      /* ----------------------------------------
+       CREATE DELIVERY ORDER
+    ---------------------------------------- */
+
+      const response = await createDeliveryOrder(Deliverypayload);
+
+      console.log(response);
+
+      /* ----------------------------------------
+       VALIDATE RESPONSE
+    ---------------------------------------- */
+
+      if (!response?.success || !response?.packages?.length) {
+        throw new Error("Delivery order creation failed");
+      }
+
+      const packageData = response.packages[0];
+
+      const { date, time } = getISTDateTime(2); // add 2 hours
+
+      const pickupPayload = {
+        pickup_date: date,
+
+        pickup_time: time,
+
+        pickup_location: "DIGIVAHAN",
+
+        expected_package_count: 1,
+      };
+
+      const deliveryPickupresponse =
+        await GenerateDeliveryPickup(pickupPayload);
+
+      console.log(deliveryPickupresponse);
+
+      /* ----------------------------------------
+       SAVE INTO DeliveryOrder COLLECTION
+    ---------------------------------------- */
+
+      await DeliveryOrder.create({
+        order_id: order._id,
+
+        waybill: packageData.waybill,
+
+        reference_number: packageData.refnum,
+
+        client: packageData.client,
+
+        payment_mode: packageData.payment,
+
+        status: packageData.status,
+
+        sort_code: packageData.sort_code,
+
+        serviceable: packageData.serviceable,
+
+        remarks: packageData.remarks,
+
+        replacement_count: response.replacement_count,
+
+        cash_pickups: response.cash_pickups,
+
+        cod_amount: response.cod_amount,
+
+        upload_wbn: response.upload_wbn,
+
+        package_count: response.package_count,
+
+        prepaid_count: response.prepaid_count,
+
+        cod_count: response.cod_count,
+
+        cash_pickups_count: response.cash_pickups_count,
+
+        pickups_count: response.pickups_count,
+
+        pickup_data: deliveryPickupresponse,
+      });
+
+      /* ----------------------------------------
+       UPDATE ORDER COLLECTION
+    ---------------------------------------- */
+
+      order.partner_order_created = true;
+
+      order.order_status = "CONFIRMED";
+
+      order.is_prepared = true;
+
+      await order.save();
     }
 
-    /* ------------------------------------------------
-       STEP 3: BUILD SHIPROCKET PAYLOAD
-    ------------------------------------------------ */
-
-    const orderItemsPayload = order.order_items.map((item) => ({
-      name: item.name,
-      sku: item.sku,
-      units: item.units,
-      selling_price: item.selling_price,
-      selling_price_currency: item.selling_price_currency,
-      weight: item.weight,
-    }));
-
-    // Optional delivery charges item
-    orderItemsPayload.push({
-      name: "Delivery Charges",
-      sku: "SHIP-001",
-      units: 1,
-      selling_price: order.sub_total,
-      selling_price_currency: "INR",
-    });
-
-    const shiprocketPayload = {
-      order_id: order.order_id,
-
-      order_date: order.order_date,
-
-      sub_total: order.sub_total,
-
-      order_value: order.order_value,
-
-      payment_method: order.payment_method,
-
-      is_prepared: order.is_prepared,
-
-      shipping_is_billing: order.shipping_is_billing,
-
-      is_return: order.is_return,
-
-      declared_value: order.declared_value,
-
-      // SHIPPING
-      shipping_customer_name: order.shipping.first_name,
-
-      shipping_last_name: order.shipping.last_name,
-
-      shipping_phone: order.shipping.phone,
-
-      shipping_address: order.shipping.address1,
-
-      shipping_address_2: order.shipping.address2,
-
-      shipping_city: order.shipping.city,
-
-      shipping_state: order.shipping.state,
-
-      shipping_country: order.shipping.country,
-
-      shipping_pincode: order.shipping.pincode,
-
-      shipping_email: order.shipping.email,
-
-      // BILLING
-      billing_customer_name: order.billing.first_name,
-
-      billing_last_name: order.billing.last_name,
-
-      billing_phone: order.billing.phone,
-
-      billing_address: order.billing.address1,
-
-      billing_address_2: order.billing.address2,
-
-      billing_city: order.billing.city,
-
-      billing_state: order.billing.state,
-
-      billing_country: order.billing.country,
-
-      billing_pincode: order.billing.pincode,
-
-      // PARCEL
-      length: order.parcel.length,
-
-      breadth: order.parcel.breadth,
-
-      height: order.parcel.height,
-
-      weight: order.parcel.weight,
-
-      // ITEMS
-      order_items: orderItemsPayload,
-    };
-
-    /* ------------------------------------------------
-       STEP 4: CREATE ORDER IN SHIPROCKET
-    ------------------------------------------------ */
-
-    const shiprocketResponse = await createShiprocketOrder(shiprocketPayload);
-
-    if (!shiprocketResponse?.shipment_id) {
-      throw new Error("Shiprocket order creation failed");
-    }
-
-    /* ------------------------------------------------
-       STEP 5: GENERATE AWB
-    ------------------------------------------------ */
-
-    const awbPayload = {
-      shipment_id: shiprocketResponse.shipment_id,
-      courier_company_id: order.ship_rocket.courier_company_id,
-    };
-
-    const awbResponse = await GenerateAWBShipment(awbPayload);
-
-    if (!awbResponse?.response?.data?.awb_code) {
-      throw new Error("AWB generation failed");
-    }
-
-    /* ------------------------------------------------
-       STEP 6: GENERATE PICKUP
-    ------------------------------------------------ */
-
-    const pickupResponse = await GeneratePickUp([
-      shiprocketResponse.shipment_id,
-    ]);
-
-    /* ------------------------------------------------
-       STEP 7: SAVE ALL DATA
-    ------------------------------------------------ */
-
-    order.ship_rocket = {
-      ...order.ship_rocket,
-
-      order_id: shiprocketResponse.order_id,
-
-      shipment_id: shiprocketResponse.shipment_id,
-
-      status_code: shiprocketResponse.status_code,
-
-      onboarding_completed_now: shiprocketResponse.onboarding_completed_now,
-
-      awb_code: awbResponse.response.data.awb_code,
-
-      new_channel: shiprocketResponse.new_channel,
-
-      status: "PENDING",
-    };
-
-    order.awb_data = awbResponse;
-
-    order.pickup_data = pickupResponse;
-
-    order.order_status = "PENDING";
-
-    order.is_prepared = true;
-
-    await order.save();
-    // await order.save({ session });
-
-    /* ------------------------------------------------
-       STEP 8: UPDATE USER REFERENCE ONLY (NO DUPLICATE)
-    ------------------------------------------------ */
-
-    await User.updateOne(
-      { _id: order.user_id },
-      {
-        $addToSet: { my_orders: order._id },
-      },
-      // { session },
-    );
-
-    // await session.commitTransaction();
+    /* ----------------------------------------
+       SUCCESS RESPONSE
+    ---------------------------------------- */
 
     return res.status(200).json({
       status: true,
-      message: "Order confirmed, AWB generated, Pickup scheduled",
-      data: order,
-      pickupResponse: pickupResponse,
+      message: "Order confirmed successfully",
     });
   } catch (error) {
-    // await session.abortTransaction();
-
-    console.error("ConfirmOrder Error:", error);
+    console.error(error);
 
     return res.status(500).json({
       status: false,
       message: error.message,
     });
-  } finally {
-    // session.endSession();
-    console.log("Order Confirmed!");
   }
 };
 
@@ -359,9 +520,8 @@ const createShiprocketOrder = async (payload) => {
 };
 
 // ------------------------------
-// AWB Shipment API Function
+// Generate AWB Shipment API Function
 // ------------------------------
-
 const GenerateAWBShipment = async (payload) => {
   try {
     const url = "https://apiv2.shiprocket.in/v1/external/courier/assign/awb";
@@ -389,10 +549,9 @@ const GenerateAWBShipment = async (payload) => {
 };
 
 // ------------------------------
-// Generate Pickup API Function
+// Generate Pickup API Function on shiprocket
 // ------------------------------
-
-const GeneratePickUp = async (payload) => {
+const GenerateShiprocketPickUp = async (payload) => {
   try {
     const url =
       "https://apiv2.shiprocket.in/v1/external/courier/generate/pickup";
@@ -426,6 +585,103 @@ const GeneratePickUp = async (payload) => {
 };
 
 // ------------------------------
+// Delivery Order API Function
+// ------------------------------
+const createDeliveryOrder = async (payload) => {
+  try {
+    if (!payload) {
+      throw new Error("Delivery payload is required");
+    }
+
+    /* ----------------------------------
+       CONVERT TO x-www-form-urlencoded
+    ----------------------------------- */
+
+    const formData = qs.stringify({
+      format: "json",
+
+      data: JSON.stringify(payload),
+    });
+
+    /* ----------------------------------
+       CALL DELHIVERY API
+    ----------------------------------- */
+
+    const response = await axios.post(
+      "https://track.delhivery.com/api/cmu/create.json",
+
+      formData,
+
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+        },
+      },
+    );
+
+    /* ----------------------------------
+       RETURN RESPONSE
+    ----------------------------------- */
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Delhivery Order Create Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw new Error(
+      error?.response?.data?.message || "Failed to create Delhivery order",
+    );
+  }
+};
+
+// ------------------------------
+// Generate Pickup API Function on Delivery
+// ------------------------------
+const GenerateDeliveryPickup = async (pickupPayload) => {
+  try {
+    if (!pickupPayload) {
+      throw new Error("Pickup payload is required");
+    }
+
+    /* ----------------------------------
+       CALL DELHIVERY PICKUP API
+    ----------------------------------- */
+
+    const response = await axios.post(
+      "https://track.delhivery.com/fm/request/new/",
+
+      pickupPayload, // ✅ send direct JSON
+
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+        },
+      },
+    );
+
+    /* ----------------------------------
+       RETURN RESPONSE
+    ----------------------------------- */
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Delhivery Pickup Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw new Error(
+      error?.response?.data?.message || "Failed to create Delhivery pickup",
+    );
+  }
+};
+
+// ------------------------------
 // Generate Manifest API Function
 // ------------------------------
 
@@ -433,7 +689,7 @@ const GenerateOrderManifest = async (req, res) => {
   try {
     const { order_id } = req.params;
 
-    // 1️⃣ Validate input
+    /* 1️⃣ Validate */
     if (!order_id) {
       return res.status(400).json({
         status: false,
@@ -441,52 +697,52 @@ const GenerateOrderManifest = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find order
-    const order = await Order.findById(order_id);
+    /* 2️⃣ Find Shiprocket Order */
+    const shiprocketOrder = await ShiprocketOrder.findOne({
+      order_id: order_id,
+    });
 
-    if (!order) {
+    if (!shiprocketOrder) {
       return res.status(404).json({
         status: false,
-        message: "Order not found",
+        message: "Shiprocket order not found",
       });
     }
 
-    // 3️⃣ NEW VALIDATION: Prevent manifest for canceled orders
-    if (order.order_status === "CANCELED") {
+    /* 3️⃣ Prevent manifest for canceled shipment */
+    if (shiprocketOrder.status === "CANCELED") {
       return res.status(400).json({
         status: false,
-        message: "Manifest cannot be generated for canceled order",
+        message: "Manifest cannot be generated for canceled shipment",
       });
     }
 
-    // 4️⃣ Check shipment_id exists
-    const shipment_id = order.ship_rocket?.shipment_id;
-
-    if (!shipment_id) {
+    /* 4️⃣ Check shipment_id */
+    if (!shiprocketOrder.shipment_id) {
       return res.status(400).json({
         status: false,
-        message: "Shipment ID not found. Generate AWB first.",
+        message: "Shipment ID not found",
       });
     }
 
-    // 5️⃣ Prevent duplicate manifest generation
-    if (order.ship_rocket?.manifest_url) {
+    /* 5️⃣ Prevent duplicate manifest */
+    if (shiprocketOrder.manifest_url) {
       return res.status(200).json({
         status: true,
         message: "Manifest already generated",
         data: {
-          order_id: order._id,
-          shipment_id,
-          manifest_url: order.ship_rocket.manifest_url,
+          order_id: shiprocketOrder.order_id,
+          shipment_id: shiprocketOrder.shipment_id,
+          manifest_url: shiprocketOrder.manifest_url,
         },
       });
     }
 
-    // 6️⃣ Call Shiprocket Manifest API
+    /* 6️⃣ Call Shiprocket API */
     const response = await axios.post(
       "https://apiv2.shiprocket.in/v1/external/manifests/generate",
       {
-        shipment_id: [shipment_id],
+        shipment_id: [shiprocketOrder.shipment_id],
       },
       {
         headers: {
@@ -506,19 +762,20 @@ const GenerateOrderManifest = async (req, res) => {
       });
     }
 
-    // 7️⃣ Save manifest in DB
-    order.ship_rocket.manifest_url = manifestUrl;
-    order.ship_rocket.manifest_generated_at = new Date();
+    /* 7️⃣ Update ShiprocketOrder Schema */
+    shiprocketOrder.manifest_url = manifestUrl;
 
-    await order.save();
+    shiprocketOrder.manifest_generated_at = new Date();
 
-    // 8️⃣ Success response
+    await shiprocketOrder.save();
+
+    /* 8️⃣ Success */
     return res.status(200).json({
       status: true,
       message: "Manifest generated successfully",
       data: {
-        order_id: order._id,
-        shipment_id,
+        order_id: shiprocketOrder.order_id,
+        shipment_id: shiprocketOrder.shipment_id,
         manifest_url: manifestUrl,
       },
     });
@@ -540,11 +797,14 @@ const GenerateOrderManifest = async (req, res) => {
 // Generate Lable API Function
 // ------------------------------
 
-const GenerateLable = async (req, res) => {
+const GenerateShiprocketLabel = async (req, res) => {
   try {
     const { order_id } = req.params;
 
-    // 1️⃣ Validate input
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
     if (!order_id) {
       return res.status(400).json({
         status: false,
@@ -552,7 +812,17 @@ const GenerateLable = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find order
+    if (!mongoose.Types.ObjectId.isValid(order_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid order_id",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ FIND ORDER
+    ----------------------------- */
+
     const order = await Order.findById(order_id);
 
     if (!order) {
@@ -562,48 +832,63 @@ const GenerateLable = async (req, res) => {
       });
     }
 
-
-    // 3️⃣ Check shipment_id exists
-    const shipment_id = order.ship_rocket?.shipment_id;
-
-    if (!shipment_id) {
+    if (order.active_partner !== "shiprocket") {
       return res.status(400).json({
         status: false,
-        message: "Shipment ID not found. Generate AWB first.",
+        message: "This order is not created with Delivery partner",
       });
     }
 
-    // 4️⃣ Prevent duplicate label generation
-    if (order.ship_rocket?.label_url) {
+    /* 2️⃣ Find ShiprocketOrder */
+    const shiprocketOrder = await ShiprocketOrder.findOne({
+      order_id: order_id,
+    });
+
+    if (!shiprocketOrder) {
+      return res.status(404).json({
+        status: false,
+        message: "Shiprocket order not found",
+      });
+    }
+
+    /* 4️⃣ Check shipment_id exists */
+    if (!shiprocketOrder.shipment_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Shipment ID not found. Generate shipment first.",
+      });
+    }
+
+    /* 5️⃣ Prevent duplicate label generation */
+    if (shiprocketOrder.label_url) {
       return res.status(200).json({
         status: true,
         message: "Label already generated",
         data: {
-          order_id: order._id,
-          shipment_id,
-          label_url: order.ship_rocket.label_url,
+          order_id: shiprocketOrder.order_id,
+          shipment_id: shiprocketOrder.shipment_id,
+          label_url: shiprocketOrder.label_url,
         },
       });
     }
 
-    // 5️⃣ Call Shiprocket Label API
+    /* 6️⃣ Call Shiprocket Label API */
     const response = await axios.post(
       "https://apiv2.shiprocket.in/v1/external/courier/generate/label",
       {
-        shipment_id: [shipment_id],
+        shipment_id: [shiprocketOrder.shipment_id],
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
-    // 6️⃣ Correct response extraction
+    /* 7️⃣ Extract label URL */
     const labelUrl =
-      response?.data?.label_url ||
-      response?.data?.response?.label_url;
+      response?.data?.label_url || response?.data?.response?.label_url;
 
     if (!labelUrl) {
       return res.status(500).json({
@@ -613,27 +898,27 @@ const GenerateLable = async (req, res) => {
       });
     }
 
-    // 7️⃣ Save label URL in DB
-    order.ship_rocket.label_url = labelUrl;
-    order.ship_rocket.label_generated_at = new Date();
+    /* 8️⃣ Save in ShiprocketOrder collection */
+    shiprocketOrder.label_url = labelUrl;
 
-    await order.save();
+    shiprocketOrder.label_generated_at = new Date();
 
-    // 8️⃣ Return success
+    await shiprocketOrder.save();
+
+    /* 9️⃣ Success response */
     return res.status(200).json({
       status: true,
       message: "Label generated successfully",
       data: {
-        order_id: order._id,
-        shipment_id,
+        order_id: shiprocketOrder.order_id,
+        shipment_id: shiprocketOrder.shipment_id,
         label_url: labelUrl,
       },
     });
-
   } catch (error) {
     console.error(
       "GenerateLabel Error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
 
     return res.status(500).json({
@@ -644,11 +929,125 @@ const GenerateLable = async (req, res) => {
   }
 };
 
+const GenerateDeliveryLabel = async (req, res) => {
+  try {
+    const { order_id } = req.params;
+
+    if (!order_id) {
+      return res.status(400).json({
+        status: false,
+        message: "order_id is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(order_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid order_id",
+      });
+    }
+
+    /* 1️⃣ Find Order */
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    if (order.active_partner !== "delivery") {
+      return res.status(400).json({
+        status: false,
+        message: "This order is not created with Delivery partner",
+      });
+    }
+
+    /* 2️⃣ Find Delivery Order */
+    const deliveryOrder = await DeliveryOrder.findOne({
+      order_id: order._id,
+    });
+
+    if (!deliveryOrder?.waybill) {
+      return res.status(404).json({
+        status: false,
+        message: "Waybill not found",
+      });
+    }
+
+    // If already generated
+    if (deliveryOrder.label_url) {
+      return res.status(200).json({
+        status: true,
+        message: "Label already generated",
+        data: {
+          order_id: deliveryOrder.order_id,
+          shipment_id: deliveryOrder.waybill,
+          label_url: deliveryOrder.label_url,
+        },
+      });
+    }
+
+    /* 3️⃣ Call Delhivery API */
+    const response = await axios.get(
+      "https://track.delhivery.com/api/p/packing_slip",
+      {
+        params: {
+          wbns: deliveryOrder.waybill,
+          pdf: true,
+          pdf_size: "",
+        },
+        headers: {
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+          Accept: "application/json",
+        },
+      },
+    );
+
+    // 🔥 IMPORTANT FIX
+    const labelUrl = response?.data?.packages?.[0]?.pdf_download_link;
+
+    if (!labelUrl) {
+      return res.status(400).json({
+        status: false,
+        message: "Failed to generate label",
+        error: response.data,
+      });
+    }
+
+    /* 4️⃣ Save in DB */
+    deliveryOrder.label_url = labelUrl;
+    deliveryOrder.label_generated_at = new Date();
+    await deliveryOrder.save();
+
+    /* 5️⃣ Return Response */
+    return res.status(200).json({
+      status: true,
+      message: "Label generated successfully",
+      data: {
+        order_id: deliveryOrder.order_id,
+        shipment_id: deliveryOrder.waybill,
+        label_url: labelUrl,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "GenerateDeliveryLabel Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to generate delivery label",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
 
 // ------------------------------
 // Get All Order From user My-order node
 // ------------------------------
-
 const getUserAllOrder = async (req, res) => {
   try {
     const { user_id } = req.body;
@@ -694,7 +1093,7 @@ const getUserAllOrder = async (req, res) => {
 
 // ------------------------------
 // Find Single Order Details
-// --
+// ------------------------------
 const findSingleOrderData = async (req, res) => {
   try {
     const { user_id, order_id } = req.body;
@@ -737,113 +1136,16 @@ const findSingleOrderData = async (req, res) => {
 };
 
 // ------------------------------
-// Filter Courier Service Company on the basis of Price & Date
-// --
-const checkCouierService = async (req, res) => {
-  try {
-    const { delivery_postcode, compareOn } = req.body;
-
-    // Payload
-    const payload = {
-      pickup_postcode: 110059,
-      delivery_postcode,
-      cod: 0,
-      weight: "0.05",
-      mode: "Surface",
-      declared_value: 100,
-      length: 20,
-      breadth: 8,
-      height: 4,
-      is_return: 0,
-      qc_check: 0,
-      only_local: 0,
-      product_category: "non-document",
-      couriers_type: 0,
-      address_type: 1,
-      is_oda_check: 1,
-      payment_mode: "Prepaid",
-    };
-
-    const queryString = new URLSearchParams(payload).toString();
-
-    const API_URL = `https://apiv2.shiprocket.in/v1/external/courier/serviceability/?${queryString}`;
-
-    const response = await axios.get(API_URL, {
-      headers: {
-        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
-      },
-    });
-
-    // console.log("🚚 Shiprocket Response:", response.data);
-
-    let courier_companies =
-      response.data.data.available_courier_companies || [];
-
-    courier_companies = courier_companies.map((courier) => {
-      const freight = Number(courier.freight_charge) || 0;
-      const other = Number(courier.other_charges) || 0;
-
-      return {
-        ...courier,
-        total_price: freight + other,
-      };
-    });
-
-    let estimated1 = courier_companies.sort(
-      (a, b) => a.total_price - b.total_price,
-    );
-    let estimated2 = courier_companies.sort(
-      (a, b) =>
-        Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
-    );
-
-    if (compareOn === "price") {
-      courier_companies.sort((a, b) => a.total_price - b.total_price);
-    } else if (compareOn === "days") {
-      courier_companies.sort(
-        (a, b) =>
-          Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
-      );
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Serviceability Fetched Successfully",
-      is_fast_delivery:
-        estimated1[0].estimated_delivery_days ===
-        estimated2[0].estimated_delivery_days
-          ? false
-          : true,
-      data: {
-        courier_company_id: courier_companies[0].courier_company_id,
-        courier_name: courier_companies[0].courier_name,
-        estimated_delivery_days: courier_companies[0].estimated_delivery_days,
-        freight_charge: courier_companies[0].freight_charge,
-        suppress_date: courier_companies[0].suppress_date,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "❌ Shiprocket Error:",
-      error?.response?.data || error.message,
-    );
-
-    return res.status(500).json({
-      status: false,
-      message: "Something went wrong",
-      error: error?.response?.data || error.message,
-    });
-  }
-};
-
-// ------------------------------
 // Get Order Details By Admin
 // --
 const findOrderByAdminThrowOrderId = async (req, res) => {
   try {
     const { order_id } = req.body;
 
-    // Validate input
+    /* -----------------------------
+       1️⃣ Validate input
+    ----------------------------- */
+
     if (!order_id || typeof order_id !== "string") {
       return res.status(400).json({
         status: false,
@@ -851,12 +1153,11 @@ const findOrderByAdminThrowOrderId = async (req, res) => {
       });
     }
 
-    // Fetch order using indexed field
-    const order = await Order.findOne(
-      { order_id },
-      {}, // projection (optional)
-      { lean: true }, // improves performance
-    );
+    /* -----------------------------
+       2️⃣ Find order
+    ----------------------------- */
+
+    const order = await Order.findOne({ order_id }, {}, { lean: true });
 
     if (!order) {
       return res.status(404).json({
@@ -865,13 +1166,43 @@ const findOrderByAdminThrowOrderId = async (req, res) => {
       });
     }
 
+    let partnerDetails = null;
+
+    /* =====================================================
+       🚀 SHIPROCKET FLOW
+    ===================================================== */
+
+    if (order.active_partner === "shiprocket") {
+      partnerDetails = await ShiprocketOrder.findOne(
+        { order_id: order._id },
+        {},
+        { lean: true },
+      );
+    } else if (order.active_partner === "delivery") {
+      /* =====================================================
+       🚚 DELIVERY FLOW
+    ===================================================== */
+      partnerDetails = await DeliveryOrder.findOne(
+        { order_id: order._id },
+        {},
+        { lean: true },
+      );
+    }
+
+    /* -----------------------------
+       3️⃣ Final Response
+    ----------------------------- */
+
     return res.status(200).json({
       status: true,
       message: "Order fetched successfully",
-      data: order,
+      data: {
+        order: order,
+        partner: partnerDetails || null,
+      },
     });
   } catch (error) {
-    console.error("findOrderByOrderId Error:", error);
+    console.error("findOrderByAdminThrowOrderId Error:", error);
 
     return res.status(500).json({
       status: false,
@@ -889,7 +1220,10 @@ const findOrderByAdminThrowUserId = async (req, res) => {
   try {
     const { user_id, page = 1, limit = 20 } = req.body;
 
-    // Validate user_id
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
     if (!user_id) {
       return res.status(400).json({
         status: false,
@@ -897,7 +1231,6 @@ const findOrderByAdminThrowUserId = async (req, res) => {
       });
     }
 
-    // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
       return res.status(400).json({
         status: false,
@@ -907,24 +1240,112 @@ const findOrderByAdminThrowUserId = async (req, res) => {
 
     const userObjectId = new mongoose.Types.ObjectId(user_id);
 
-    // Pagination calculation
+    const user = await User.findById(userObjectId).lean();
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ PAGINATION
+    ----------------------------- */
+
     const skip = (page - 1) * limit;
 
-    // Fetch orders
     const orders = await Order.find({ user_id: userObjectId }, null, {
-      sort: { createdAt: -1 }, // latest first
+      sort: { createdAt: -1 },
       skip,
       limit,
       lean: true,
     });
 
-    // Get total count
     const totalOrders = await Order.countDocuments({
       user_id: userObjectId,
     });
 
+    /* -----------------------------
+       3️⃣ SEPARATE BY PARTNER
+    ----------------------------- */
+
+    const shiprocketIds = [];
+    const deliveryIds = [];
+
+    orders.forEach((order) => {
+      if (!order.partner_order_created) return;
+
+      if (order.active_partner === "shiprocket") {
+        shiprocketIds.push(order._id);
+      }
+
+      if (order.active_partner === "delivery") {
+        deliveryIds.push(order._id);
+      }
+    });
+
+    /* -----------------------------
+       4️⃣ FETCH PARTNER DATA IN BULK
+    ----------------------------- */
+
+    const [shiprocketOrders, deliveryOrders] = await Promise.all([
+      shiprocketIds.length
+        ? ShiprocketOrder.find({ order_id: { $in: shiprocketIds } }, null, {
+            lean: true,
+          })
+        : [],
+
+      deliveryIds.length
+        ? DeliveryOrder.find({ order_id: { $in: deliveryIds } }, null, {
+            lean: true,
+          })
+        : [],
+    ]);
+
+    /* -----------------------------
+       5️⃣ CREATE MAPS (FAST LOOKUP)
+    ----------------------------- */
+
+    const shiprocketMap = {};
+    const deliveryMap = {};
+
+    shiprocketOrders.forEach((sr) => {
+      shiprocketMap[sr.order_id.toString()] = sr;
+    });
+
+    deliveryOrders.forEach((dl) => {
+      deliveryMap[dl.order_id.toString()] = dl;
+    });
+
+    /* -----------------------------
+       6️⃣ MERGE DATA
+    ----------------------------- */
+
+    const finalOrders = orders.map((order) => {
+      let partnerDetails = null;
+
+      if (order.active_partner === "shiprocket") {
+        partnerDetails = shiprocketMap[order._id.toString()] || null;
+      }
+
+      if (order.active_partner === "delivery") {
+        partnerDetails = deliveryMap[order._id.toString()] || null;
+      }
+
+      return {
+        order,
+        partner_details: partnerDetails,
+      };
+    });
+
+    /* -----------------------------
+       7️⃣ RESPONSE
+    ----------------------------- */
+
     return res.status(200).json({
       status: true,
+
       message: "Orders fetched successfully",
 
       pagination: {
@@ -934,7 +1355,7 @@ const findOrderByAdminThrowUserId = async (req, res) => {
         total_pages: Math.ceil(totalOrders / limit),
       },
 
-      data: orders,
+      data: finalOrders,
     });
   } catch (error) {
     console.error("findOrderByAdminThrowUserId Error:", error);
@@ -1003,7 +1424,10 @@ const OrderCancelByUser = async (req, res) => {
   try {
     const { order_id, user_id } = req.body;
 
-    // Validate input
+    /* -----------------------------
+       1️⃣ Validate input
+    ----------------------------- */
+
     if (!order_id || !user_id) {
       return res.status(400).json({
         status: false,
@@ -1011,7 +1435,20 @@ const OrderCancelByUser = async (req, res) => {
       });
     }
 
-    // Find order with user validation
+    if (
+      !mongoose.Types.ObjectId.isValid(order_id) ||
+      !mongoose.Types.ObjectId.isValid(user_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid order_id or user_id",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ Find Order
+    ----------------------------- */
+
     const order = await Order.findOne({
       _id: order_id,
       user_id: user_id,
@@ -1024,23 +1461,10 @@ const OrderCancelByUser = async (req, res) => {
       });
     }
 
-    // Prevent cancel if already prepared
-    if (order.is_prepared === true) {
-      return res.status(400).json({
-        status: false,
-        message: "Order already prepared, cannot cancel",
-      });
-    }
+    /* -----------------------------
+       3️⃣ Already canceled check
+    ----------------------------- */
 
-    // Prevent cancel if shipment already created
-    if (order.ship_rocket?.shipment_id || order.ship_rocket?.awb_code) {
-      return res.status(400).json({
-        status: false,
-        message: "Shipment already created, cannot cancel this order",
-      });
-    }
-
-    // Prevent cancel if already canceled
     if (order.order_status === "CANCELED") {
       return res.status(400).json({
         status: false,
@@ -1048,11 +1472,30 @@ const OrderCancelByUser = async (req, res) => {
       });
     }
 
-    // Cancel order
+    /* -----------------------------
+       4️⃣ If prepared, check shipment
+    ----------------------------- */
+
+    if (order.is_prepared === true) {
+      return res.status(400).json({
+        status: false,
+        message: "Order already prepared, cannot cancel",
+      });
+    }
+
+    /* -----------------------------
+       5️⃣ Cancel order (allowed)
+    ----------------------------- */
+
     order.order_status = "CANCELED";
+
     order.canceled_at = new Date();
 
     await order.save();
+
+    /* -----------------------------
+       6️⃣ Success response
+    ----------------------------- */
 
     return res.status(200).json({
       status: true,
@@ -1072,12 +1515,15 @@ const OrderCancelByUser = async (req, res) => {
 
 // ------------------------------
 // Order Cancel By Admin
-// --
+// ------------------------------
 const OrderCancelByAdmin = async (req, res) => {
   try {
     const { user_id, order_id } = req.body;
 
-    // Validate input
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
     if (!user_id || !order_id) {
       return res.status(400).json({
         status: false,
@@ -1085,7 +1531,20 @@ const OrderCancelByAdmin = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find order with user validation (SECURE + FAST)
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(order_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid user_id or order_id",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ FIND ORDER + VERIFY USER
+    ----------------------------- */
+
     const order = await Order.findOne({
       _id: order_id,
       user_id: user_id,
@@ -1094,21 +1553,10 @@ const OrderCancelByAdmin = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         status: false,
-        message: "Order not found for this user",
+        message: "Order not found",
       });
     }
 
-    // 2️⃣ Check Shiprocket order exists
-    const shiprocketOrderId = order.ship_rocket?.order_id;
-
-    if (!shiprocketOrderId) {
-      return res.status(400).json({
-        status: false,
-        message: "Shiprocket order id not found",
-      });
-    }
-
-    // 3️⃣ Prevent duplicate cancel
     if (order.order_status === "CANCELED") {
       return res.status(400).json({
         status: false,
@@ -1116,35 +1564,87 @@ const OrderCancelByAdmin = async (req, res) => {
       });
     }
 
-    // 4️⃣ Call Shiprocket Cancel API
-    const cancelResponse = await cancelShiprocketOrder(shiprocketOrderId);
+    let partnerResponse = null;
 
-    if (!cancelResponse) {
-      return res.status(400).json({
-        status: false,
-        message: "Shiprocket cancellation failed",
+    /* =====================================================
+       🚀 SHIPROCKET FLOW
+    ===================================================== */
+
+    if (order.active_partner === "shiprocket") {
+      const shiprocketOrder = await ShiprocketOrder.findOne({
+        order_id: order._id,
       });
+
+      if (!shiprocketOrder?.shiprocket_order_id) {
+        return res.status(400).json({
+          status: false,
+          message: "Shiprocket order not found",
+        });
+      }
+
+      partnerResponse = await cancelShiprocketOrder(
+        shiprocketOrder.shiprocket_order_id,
+      );
+
+      if (!partnerResponse) {
+        return res.status(400).json({
+          status: false,
+          message: "Shiprocket cancellation failed",
+        });
+      }
+
+      shiprocketOrder.status = "CANCELED";
+      shiprocketOrder.canceled_at = new Date();
+      await shiprocketOrder.save();
+    } else if (order.active_partner === "delivery") {
+      /* =====================================================
+       🚚 DELIVERY FLOW
+    ===================================================== */
+      const deliveryOrder = await DeliveryOrder.findOne({
+        order_id: order._id,
+      });
+
+      if (!deliveryOrder?.waybill) {
+        return res.status(400).json({
+          status: false,
+          message: "Delivery order not found",
+        });
+      }
+
+      // 🔥 Call Delivery Cancel API (you already created this function)
+      partnerResponse = await cancelDeliveryShipment(deliveryOrder.waybill);
+
+      if (!partnerResponse?.status) {
+        return res.status(400).json({
+          status: false,
+          message: "Delivery cancellation failed",
+        });
+      }
+
+      deliveryOrder.status = "CANCELED";
+      deliveryOrder.canceled_at = new Date();
+      await deliveryOrder.save();
     }
 
-    // 5️⃣ Update Order schema
+    /* -----------------------------
+       3️⃣ UPDATE ORDER COLLECTION
+    ----------------------------- */
+
     order.order_status = "CANCELED";
-
-    order.ship_rocket.status = "CANCELED";
-
-    order.ship_rocket.awb_code = "";
-
     order.canceled_at = new Date();
-
     await order.save();
+
+    /* -----------------------------
+       4️⃣ SUCCESS RESPONSE
+    ----------------------------- */
 
     return res.status(200).json({
       status: true,
       message: "Order canceled successfully",
-
       data: {
         order_id: order._id,
-        shiprocket_order_id: shiprocketOrderId,
-        shiprocket_response: cancelResponse,
+        active_partner: order.active_partner,
+        partner_response: partnerResponse,
       },
     });
   } catch (error) {
@@ -1187,12 +1687,74 @@ const cancelShiprocketOrder = async (orderId) => {
   }
 };
 
+// Delivery cancel order apis
+const cancelDeliveryShipment = async (waybill) => {
+  try {
+    if (!waybill) {
+      throw new Error("Waybill is required for cancellation");
+    }
+
+    /* ----------------------------------
+       BUILD PAYLOAD
+    ----------------------------------- */
+
+    const payload = {
+      waybill: waybill,
+
+      cancellation: "true",
+    };
+
+    /* ----------------------------------
+       CALL DELHIVERY CANCEL API
+    ----------------------------------- */
+
+    const response = await axios.post(
+      "https://track.delhivery.com/api/p/edit",
+
+      payload,
+
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+        },
+      },
+    );
+
+    /* ----------------------------------
+       VALIDATE RESPONSE
+    ----------------------------------- */
+
+    if (!response?.data) {
+      throw new Error("Delhivery cancellation failed");
+    }
+
+    /* ----------------------------------
+       RETURN RESPONSE
+    ----------------------------------- */
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Delhivery Cancel Shipment Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw new Error(
+      error?.response?.data?.message || "Failed to cancel Delhivery shipment",
+    );
+  }
+};
+
 // Track Order Status
 const TrackOrderwithOrderId = async (req, res) => {
   try {
     const { user_id, order_id } = req.body;
 
-    // 1️⃣ Validate input
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
     if (!user_id || !order_id) {
       return res.status(400).json({
         status: false,
@@ -1200,7 +1762,20 @@ const TrackOrderwithOrderId = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find order securely
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(order_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid user_id or order_id",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ FIND ORDER
+    ----------------------------- */
+
     const order = await Order.findOne({
       _id: order_id,
       user_id: user_id,
@@ -1209,68 +1784,131 @@ const TrackOrderwithOrderId = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         status: false,
-        message: "Order not found for this user",
+        message: "Order not found",
       });
     }
 
-    // 3️⃣ Get Shiprocket order id automatically
-    const shiprocketOrderId = order.ship_rocket?.order_id;
-
-    if (!shiprocketOrderId) {
+    if (!order.partner_order_created) {
       return res.status(400).json({
         status: false,
-        message: "Shiprocket order id not found for tracking",
+        message: "Order not confirmed yet",
       });
     }
 
-    // 4️⃣ Call Shiprocket tracking API
-    const trackingData = await trackShiprocketOrder(shiprocketOrderId);
+    let shipmentStatus = "UNKNOWN";
+    let partnerResponse = null;
 
-    if (!trackingData) {
-      return res.status(400).json({
-        status: false,
-        message: "Tracking API failed",
+    /* =====================================================
+       🚀 SHIPROCKET FLOW
+    ===================================================== */
+
+    if (order.active_partner === "shiprocket") {
+      const shiprocketOrder = await ShiprocketOrder.findOne({
+        order_id: order._id,
       });
+
+      if (!shiprocketOrder?.shiprocket_order_id) {
+        return res.status(400).json({
+          status: false,
+          message: "Shiprocket order id not found",
+        });
+      }
+
+      partnerResponse = await trackShiprocketOrder(
+        shiprocketOrder.shiprocket_order_id,
+      );
+
+      const shipment = partnerResponse?.data?.shipments?.[0] || {};
+
+      shipmentStatus =
+        shipment?.current_status ||
+        partnerResponse?.data?.status ||
+        shiprocketOrder.status ||
+        "UNKNOWN";
+
+      /* UPDATE SHIPROCKET COLLECTION */
+      shiprocketOrder.status = shipmentStatus;
+      shiprocketOrder.tracking_data = partnerResponse;
+      shiprocketOrder.last_tracked_at = new Date();
+      await shiprocketOrder.save();
+    } else if (order.active_partner === "delivery") {
+      /* =====================================================
+       🚚 DELIVERY FLOW
+    ===================================================== */
+      const deliveryOrder = await DeliveryOrder.findOne({
+        order_id: order._id,
+      });
+
+      if (!deliveryOrder?.waybill) {
+        return res.status(400).json({
+          status: false,
+          message: "Delivery order not found",
+        });
+      }
+
+      partnerResponse = await trackDeliveryOrder(deliveryOrder.waybill);
+
+      /* -----------------------------
+         EXTRACT LAST SCAN
+      ----------------------------- */
+
+      /* -----------------------------
+   EXTRACT LAST SCAN TYPE
+----------------------------- */
+
+      const shipmentData = partnerResponse?.ShipmentData?.[0]?.Shipment || {};
+
+      const scans = shipmentData?.Scans || [];
+
+      const lastScan =
+        scans.length > 0 ? scans[scans.length - 1]?.ScanDetail : null;
+
+      const scanType = lastScan?.ScanType || shipmentData?.Status?.StatusType;
+
+      /* -----------------------------
+   MAP SCAN TYPE TO ORDER STATUS
+----------------------------- */
+
+      const statusMap = {
+        UD: "IN_TRANSIT",
+        DL: "DELIVERED",
+        RT: "RETURNED",
+        CN: "CANCELED",
+        PU: "PICKED_UP",
+      };
+
+      shipmentStatus = statusMap[scanType] || deliveryOrder.status || "UNKNOWN";
+
+      /* UPDATE DELIVERY COLLECTION */
+      deliveryOrder.status = shipmentStatus;
+      deliveryOrder.tracking_data = partnerResponse;
+      deliveryOrder.tracking_url = `https://www.delhivery.com/track-v2/package/${deliveryOrder.waybill}`;
+      deliveryOrder.last_tracked_at = new Date();
+
+      await deliveryOrder.save();
     }
 
-    // 5️⃣ Extract tracking info safely
-    const shipment = trackingData?.data?.shipments?.[0] || {};
+    /* -----------------------------
+       UPDATE ORDER COLLECTION
+    ----------------------------- */
 
-    const shipmentStatus =
-      shipment?.current_status || trackingData?.data?.status || "UNKNOWN";
-
-    const awbCode = shipment?.awb || order.ship_rocket?.awb_code || "";
-
-    const courierName =
-      shipment?.courier || order.ship_rocket?.courier_name || "";
-
-    // 6️⃣ Update Order schema
     order.order_status = shipmentStatus;
-
-    order.ship_rocket.status = shipmentStatus;
-
-    order.ship_rocket.awb_code = awbCode;
-
-    order.ship_rocket.courier_name = courierName;
-
-    order.ship_rocket.tracking_data = trackingData;
-
     order.last_tracked_at = new Date();
 
     await order.save();
 
-    // 7️⃣ Response
+    /* -----------------------------
+       SUCCESS RESPONSE
+    ----------------------------- */
+
     return res.status(200).json({
       status: true,
       message: "Order tracked successfully",
-
       data: {
         order_id: order._id,
-        shiprocket_order_id: shiprocketOrderId,
+        active_partner: order.active_partner,
         shipment_status: shipmentStatus,
-        awb_code: awbCode,
-        courier_name: courierName,
-        tracking: trackingData,
+        tracking: partnerResponse,
       },
     });
   } catch (error) {
@@ -1298,18 +1936,474 @@ const trackShiprocketOrder = async (shiprocketOrderId) => {
   return response.data;
 };
 
+// Delivery Order Track Function
+const trackDeliveryOrder = async (waybill) => {
+  try {
+    if (!waybill) {
+      throw new Error("Waybill is required for tracking");
+    }
+
+    /* ----------------------------------
+       BUILD TRACKING URL
+    ----------------------------------- */
+
+    const url = `https://track.delhivery.com/api/v1/packages/json/?waybill=${waybill}`;
+
+    /* ----------------------------------
+       CALL DELHIVERY TRACK API
+    ----------------------------------- */
+
+    const response = await axios.get(url, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+      },
+    });
+
+    /* ----------------------------------
+       VALIDATE RESPONSE
+    ----------------------------------- */
+
+    if (!response?.data) {
+      throw new Error("Tracking failed");
+    }
+
+    /* ----------------------------------
+       RETURN RESPONSE
+    ----------------------------------- */
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Delhivery Tracking Error:",
+      error?.response?.data || error.message,
+    );
+
+    throw new Error(
+      error?.response?.data?.message || "Failed to track Delhivery shipment",
+    );
+  }
+};
+
+// ------------------------------
+// Filter Courier Service Company on the basis of Price & Date
+// --
+
+const CheckCourierService = async (req, res) => {
+  try {
+    const { delivery_postcode, compareOn } = req.body;
+
+    if (!delivery_postcode) {
+      return res.status(400).json({
+        status: false,
+        message: "delivery_postcode is required",
+      });
+    }
+
+    /* ----------------------------------
+       1️⃣ GET ACTIVE PARTNER
+    ----------------------------------- */
+
+    const config = await AdminConfig.findOne().lean();
+
+    if (!config?.active_partner) {
+      return res.status(400).json({
+        status: false,
+        message: "Active partner not configured",
+      });
+    }
+
+    const activePartner = config.active_partner;
+
+    let normalizedResponse = null;
+
+    /* =====================================================
+       🚀 SHIPROCKET FLOW
+    ===================================================== */
+
+    if (activePartner === "shiprocket") {
+      const srResponse = await checkShiprocketCouierService(
+        delivery_postcode,
+        compareOn,
+      );
+
+      if (!srResponse?.data) {
+        return res.status(400).json({
+          status: false,
+          message: "Shiprocket service check failed",
+        });
+      }
+
+      normalizedResponse = {
+        courier_company_id: srResponse.data.courier_company_id,
+        courier_name: srResponse.data.courier_name,
+        estimated_delivery_days: srResponse.data.estimated_delivery_days,
+        freight_charge: srResponse.data.freight_charge,
+        suppress_date: srResponse.data.suppress_date,
+      };
+    } else if (activePartner === "delivery") {
+      /* =====================================================
+       🚚 DELIVERY FLOW
+    ===================================================== */
+      const dlResponse = await checkDeliverycouierService(delivery_postcode);
+
+      if (!dlResponse?.data) {
+        return res.status(400).json({
+          status: false,
+          message: "Delivery service check failed",
+        });
+      }
+
+      const tatData = dlResponse.data.tat?.data || {};
+      const chargesData = dlResponse.data.charges || {};
+
+      normalizedResponse = {
+        courier_company_id: null, // Delhivery does not provide
+        courier_name: "Delhivery Surface",
+        estimated_delivery_days: tatData.tat || null,
+        freight_charge: chargesData.final_total_charge || 0,
+        suppress_date: tatData.expected_delivery_date || null,
+      };
+    }
+
+    /* ----------------------------------
+       3️⃣ FINAL RESPONSE
+    ----------------------------------- */
+
+    return res.status(200).json({
+      status: true,
+      active_partner: activePartner,
+      data: normalizedResponse,
+    });
+  } catch (error) {
+    console.error(
+      "CheckCourierService Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to check courier service",
+      error: error.message,
+    });
+  }
+};
+
+const checkShiprocketCouierService = async (delivery_postcode, compareOn) => {
+  try {
+    // Payload
+    const payload = {
+      pickup_postcode: 110059,
+      delivery_postcode,
+      cod: 0,
+      weight: "0.05",
+      mode: "Surface",
+      declared_value: 100,
+      length: 20,
+      breadth: 8,
+      height: 4,
+      is_return: 0,
+      qc_check: 0,
+      only_local: 0,
+      product_category: "non-document",
+      couriers_type: 0,
+      address_type: 1,
+      is_oda_check: 1,
+      payment_mode: "Prepaid",
+    };
+
+    const queryString = new URLSearchParams(payload).toString();
+
+    const API_URL = `https://apiv2.shiprocket.in/v1/external/courier/serviceability/?${queryString}`;
+
+    const response = await axios.get(API_URL, {
+      headers: {
+        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+      },
+    });
+
+    // console.log("🚚 Shiprocket Response:", response.data);
+
+    let courier_companies =
+      response.data.data.available_courier_companies || [];
+
+    courier_companies = courier_companies.map((courier) => {
+      const freight = Number(courier.freight_charge) || 0;
+      const other = Number(courier.other_charges) || 0;
+
+      return {
+        ...courier,
+        total_price: freight + other,
+      };
+    });
+
+    let estimated1 = courier_companies.sort(
+      (a, b) => a.total_price - b.total_price,
+    );
+    let estimated2 = courier_companies.sort(
+      (a, b) =>
+        Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
+    );
+
+    if (compareOn === "price") {
+      courier_companies.sort((a, b) => a.total_price - b.total_price);
+    } else if (compareOn === "days") {
+      courier_companies.sort(
+        (a, b) =>
+          Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
+      );
+    }
+
+    return {
+      status: true,
+      message: "Serviceability Fetched Successfully",
+      is_fast_delivery:
+        estimated1[0].estimated_delivery_days ===
+        estimated2[0].estimated_delivery_days
+          ? false
+          : true,
+      data: {
+        courier_company_id: courier_companies[0].courier_company_id,
+        courier_name: courier_companies[0].courier_name,
+        estimated_delivery_days: courier_companies[0].estimated_delivery_days,
+        freight_charge: courier_companies[0].freight_charge,
+        suppress_date: courier_companies[0].suppress_date,
+      },
+    };
+  } catch (error) {
+    console.error(
+      "❌ Shiprocket Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Something went wrong",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
+
+const checkDeliverycouierService = async (delivery_postcode) => {
+  try {
+    /* -----------------------------
+       VALIDATE INPUT
+    ----------------------------- */
+
+    if (!delivery_postcode) {
+      return res.status(400).json({
+        status: false,
+        message: "delivery_postcode is required",
+      });
+    }
+
+    const { datetime } = getISTDateTime();
+
+    /* -----------------------------
+       1️⃣ CALL TAT API
+    ----------------------------- */
+
+    const tatParams = {
+      origin_pin: 110092,
+
+      destination_pin: delivery_postcode,
+
+      mot: "S",
+
+      pdt: "B2C",
+
+      expected_pickup_date: datetime,
+    };
+
+    const tatResponse = await axios.get(
+      "https://track.delhivery.com/api/dc/expected_tat",
+      {
+        params: tatParams,
+        headers: {
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+        },
+      },
+    );
+
+    const tatData = tatResponse.data;
+
+    /* -----------------------------
+       2️⃣ CALL CHARGES API
+    ----------------------------- */
+
+    const chargesParams = {
+      md: "S",
+
+      cgm: 10,
+
+      o_pin: 110092,
+
+      d_pin: delivery_postcode,
+
+      ss: "Delivered",
+
+      pt: "Prepaid",
+
+      l: 9,
+
+      b: 8,
+
+      h: 1,
+
+      ipkg_type: "flyer",
+    };
+
+    const chargesResponse = await axios.get(
+      "https://track.delhivery.com/api/kinko/v1/invoice/charges/.json",
+      {
+        params: chargesParams,
+        headers: {
+          Authorization: `Token ${process.env.DELHIVERY_TOKEN}`,
+        },
+      },
+    );
+
+    const chargesData = chargesResponse.data?.[0] || {};
+
+    /* -----------------------------
+       CALCULATE FINAL CHARGES
+    ----------------------------- */
+
+    const deliveryCharge = chargesData.total_amount || 0;
+
+    const platformCharge = 10;
+
+    const finalTotalCharge = deliveryCharge + platformCharge;
+
+    /* -----------------------------
+       SUCCESS RESPONSE
+    ----------------------------- */
+
+    return {
+      status: true,
+      message: "Delivery service available",
+      data: {
+        destination_pin: delivery_postcode,
+        expected_delivery_date: tatData?.expected_delivery_date || null,
+        tat: tatData,
+        charges: {
+          delivery_charge: deliveryCharge,
+          platform_charge: platformCharge,
+          final_total_charge: finalTotalCharge,
+          currency: "INR",
+        },
+      },
+    };
+  } catch (error) {
+    console.error(
+      "Delhivery Service Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to fetch delivery service details",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
+
+const AddNewActivePatner = async (req, res) => {
+  try {
+    const { admin_id, partner_name } = req.body;
+
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
+    if (!admin_id || !partner_name) {
+      return res.status(400).json({
+        status: false,
+        message: "admin_id and partner_name are required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(admin_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid admin_id",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ VERIFY ADMIN
+    ----------------------------- */
+
+    const admin = await Admin.findById(admin_id).lean();
+
+    if (!admin) {
+      return res.status(403).json({
+        status: false,
+        message: "Unauthorized access",
+      });
+    }
+
+    const normalizedPartner = partner_name.trim().toLowerCase();
+
+    /* -----------------------------
+       3️⃣ FIND OR CREATE CONFIG
+    ----------------------------- */
+
+    let config = await AdminConfig.findOne();
+
+    if (!config) {
+      config = new AdminConfig();
+    }
+
+    /* -----------------------------
+       4️⃣ RESET ALL PARTNERS TO FALSE
+    ----------------------------- */
+
+    for (let key of config.partners.keys()) {
+      config.partners.set(key, false);
+    }
+
+    /* -----------------------------
+       5️⃣ SET NEW PARTNER TRUE
+    ----------------------------- */
+
+    config.partners.set(normalizedPartner, true);
+    config.active_partner = normalizedPartner;
+
+    await config.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Active partner switched successfully",
+      data: {
+        active_partner: config.active_partner,
+        partners: Object.fromEntries(config.partners),
+      },
+    });
+  } catch (error) {
+    console.error("AddNewActivePatner Error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
   GenerateOrderManifest,
-  GenerateLable,
+  GenerateShiprocketLabel,
+  GenerateDeliveryLabel,
   getUserAllOrder,
   findSingleOrderData,
-  checkCouierService,
   GetAllNewOrderListToAdmin,
   findOrderByAdminThrowOrderId,
   findOrderByAdminThrowUserId,
   OrderCancelByAdmin,
   OrderCancelByUser,
   TrackOrderwithOrderId,
+  AddNewActivePatner,
+  CheckCourierService,
 };

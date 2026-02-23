@@ -363,11 +363,13 @@ const API_ROUTES = {
   // Order routes
   ORDER: {
     BASE: "/api",
+    ADD_ACTIVE_PARTNER: "/admin/add-active-partner",
     USER_CREATE_ORDER: "/user/create-order",
     GET_ALL_NEW_ORDER_BYADMIN: "/admin/all-new-order",
     ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
     ADMIN_GENERATE_MANIFEST: "/admin/generate-manifests/:order_id",
-    ADMIN_GENERATE_LABEL: "/admin/generate-label/:order_id",
+    ADMIN_GENERATE_SHIPROCKET_LABEL: "/admin/generate-shiprocket-label/:order_id",
+    ADMIN_GENERATE_DELIVERY_LABEL: "/admin/generate-delivery-label/:order_id",
     // find from user myorder node
     USER_ORDERS: "/orders-user-list",
     USER_ORDER_DETAILS: "/orders/order-details",
@@ -376,7 +378,7 @@ const API_ROUTES = {
     FETCH_BY_USER_ID: "/admin/fetch/user-id",
     CANCEL_ORDER_BY_ADMIN: "/orders/admin-cancel",
     CANCEL_ORDER_BY_USER: "/order/user-cancel",
-    CHECK_COURIER: "/check/courier-service",
+    CHECK_COURIER_SERVICE: "/check/courier-service",
     // Track Order Status
     TRACK_ORDER_STATUS: "/track-order-status",
   },
