@@ -116,7 +116,7 @@ router.post(
 
 router.post(
   API_ROUTES.ORDER.TRACK_ORDER_STATUS,
-  [commonValidations.userId("user_id"), handleValidationErrors],
+  [commonValidations.orderId("order_id"), handleValidationErrors],
   TrackOrderwithOrderId,
 );
 

@@ -1597,8 +1597,7 @@ const OrderCancelByAdmin = async (req, res) => {
       shiprocketOrder.canceled_at = new Date();
       await shiprocketOrder.save();
     } else if (order.active_partner === "delivery") {
-
-    /* =====================================================
+      /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
       const deliveryOrder = await DeliveryOrder.findOne({
@@ -1749,37 +1748,24 @@ const cancelDeliveryShipment = async (waybill) => {
 // Track Order Status
 const TrackOrderwithOrderId = async (req, res) => {
   try {
-    const { user_id, order_id } = req.body;
+    const { order_id } = req.body;
 
     /* -----------------------------
        1️⃣ VALIDATION
     ----------------------------- */
 
-    if (!user_id || !order_id) {
+    if (!order_id) {
       return res.status(400).json({
         status: false,
-        message: "user_id and order_id are required",
-      });
-    }
-
-    if (
-      !mongoose.Types.ObjectId.isValid(user_id) ||
-      !mongoose.Types.ObjectId.isValid(order_id)
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user_id or order_id",
+        message: "order_id is required",
       });
     }
 
     /* -----------------------------
-       2️⃣ FIND ORDER
+       2️⃣ FIND ORDER USING BUSINESS order_id
     ----------------------------- */
 
-    const order = await Order.findOne({
-      _id: order_id,
-      user_id: user_id,
-    });
+    const order = await Order.findOne({ order_id });
 
     if (!order) {
       return res.status(404).json({
@@ -1797,6 +1783,7 @@ const TrackOrderwithOrderId = async (req, res) => {
 
     let shipmentStatus = "UNKNOWN";
     let partnerResponse = null;
+    let Tracking_Link = "";
 
     /* =====================================================
        🚀 SHIPROCKET FLOW
@@ -1804,7 +1791,7 @@ const TrackOrderwithOrderId = async (req, res) => {
 
     if (order.active_partner === "shiprocket") {
       const shiprocketOrder = await ShiprocketOrder.findOne({
-        order_id: order._id,
+        order_id: order._id, // relation via Mongo _id (correct)
       });
 
       if (!shiprocketOrder?.shiprocket_order_id) {
@@ -1826,7 +1813,6 @@ const TrackOrderwithOrderId = async (req, res) => {
         shiprocketOrder.status ||
         "UNKNOWN";
 
-      /* UPDATE SHIPROCKET COLLECTION */
       shiprocketOrder.status = shipmentStatus;
       shiprocketOrder.tracking_data = partnerResponse;
       shiprocketOrder.last_tracked_at = new Date();
@@ -1848,14 +1834,6 @@ const TrackOrderwithOrderId = async (req, res) => {
 
       partnerResponse = await trackDeliveryOrder(deliveryOrder.waybill);
 
-      /* -----------------------------
-         EXTRACT LAST SCAN
-      ----------------------------- */
-
-      /* -----------------------------
-   EXTRACT LAST SCAN TYPE
------------------------------ */
-
       const shipmentData = partnerResponse?.ShipmentData?.[0]?.Shipment || {};
 
       const scans = shipmentData?.Scans || [];
@@ -1864,10 +1842,6 @@ const TrackOrderwithOrderId = async (req, res) => {
         scans.length > 0 ? scans[scans.length - 1]?.ScanDetail : null;
 
       const scanType = lastScan?.ScanType || shipmentData?.Status?.StatusType;
-
-      /* -----------------------------
-   MAP SCAN TYPE TO ORDER STATUS
------------------------------ */
 
       const statusMap = {
         UD: "IN_TRANSIT",
@@ -1879,17 +1853,17 @@ const TrackOrderwithOrderId = async (req, res) => {
 
       shipmentStatus = statusMap[scanType] || deliveryOrder.status || "UNKNOWN";
 
-      /* UPDATE DELIVERY COLLECTION */
       deliveryOrder.status = shipmentStatus;
       deliveryOrder.tracking_data = partnerResponse;
       deliveryOrder.tracking_url = `https://www.delhivery.com/track-v2/package/${deliveryOrder.waybill}`;
       deliveryOrder.last_tracked_at = new Date();
+      Tracking_Link = `https://www.delhivery.com/track-v2/package/${deliveryOrder.waybill}`;
 
       await deliveryOrder.save();
     }
 
     /* -----------------------------
-       UPDATE ORDER COLLECTION
+       UPDATE MAIN ORDER COLLECTION
     ----------------------------- */
 
     order.order_status = shipmentStatus;
@@ -1905,10 +1879,14 @@ const TrackOrderwithOrderId = async (req, res) => {
       status: true,
       message: "Order tracked successfully",
       data: {
-        order_id: order._id,
+        order_id: order.order_id, // return business id
         active_partner: order.active_partner,
         shipment_status: shipmentStatus,
-        tracking: partnerResponse,
+        owner_name: `${order.shipping.first_name} ${order.shipping.last_name}`,
+        vehicle_number: order.order_items[0].vehicle_id,
+        qr_code: order.order_items[0].sku,
+        order_date: order.createdAt,
+        tracking_url: Tracking_Link || "",
       },
     });
   } catch (error) {
