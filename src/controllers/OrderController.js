@@ -137,6 +137,13 @@ const GenerateOrderByUser = async (req, res) => {
       $push: { my_orders: order._id },
     });
 
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("new_order_created", order);
+    } else {
+      console.log("⚠️ Socket IO not initialized");
+    }
+
     return res.status(201).json({
       status: true,
 
@@ -420,7 +427,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
       const deliveryPickupresponse =
         await GenerateDeliveryPickup(pickupPayload);
 
-      console.log(deliveryPickupresponse);
+      // console.log(deliveryPickupresponse);
 
       /* ----------------------------------------
        SAVE INTO DeliveryOrder COLLECTION
@@ -482,6 +489,12 @@ const ConfirmOrderByAdmin = async (req, res) => {
     /* ----------------------------------------
        SUCCESS RESPONSE
     ---------------------------------------- */
+
+    const io = req.app.get("io");
+
+    if (io) {
+      io.emit("order_confirmed", order);
+    }
 
     return res.status(200).json({
       status: true,
@@ -1518,37 +1531,24 @@ const OrderCancelByUser = async (req, res) => {
 // ------------------------------
 const OrderCancelByAdmin = async (req, res) => {
   try {
-    const { user_id, order_id } = req.body;
+    const { order_id } = req.body;
 
     /* -----------------------------
        1️⃣ VALIDATION
     ----------------------------- */
 
-    if (!user_id || !order_id) {
+    if (!order_id) {
       return res.status(400).json({
         status: false,
-        message: "user_id and order_id are required",
-      });
-    }
-
-    if (
-      !mongoose.Types.ObjectId.isValid(user_id) ||
-      !mongoose.Types.ObjectId.isValid(order_id)
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user_id or order_id",
+        message: "order_id is required",
       });
     }
 
     /* -----------------------------
-       2️⃣ FIND ORDER + VERIFY USER
+       2️⃣ FIND ORDER USING order_id FIELD
     ----------------------------- */
 
-    const order = await Order.findOne({
-      _id: order_id,
-      user_id: user_id,
-    });
+    const order = await Order.findOne({ order_id: order_id });
 
     if (!order) {
       return res.status(404).json({
@@ -1572,7 +1572,7 @@ const OrderCancelByAdmin = async (req, res) => {
 
     if (order.active_partner === "shiprocket") {
       const shiprocketOrder = await ShiprocketOrder.findOne({
-        order_id: order._id,
+        order_id: order._id, // relation still by ObjectId internally
       });
 
       if (!shiprocketOrder?.shiprocket_order_id) {
@@ -1597,7 +1597,8 @@ const OrderCancelByAdmin = async (req, res) => {
       shiprocketOrder.canceled_at = new Date();
       await shiprocketOrder.save();
     } else if (order.active_partner === "delivery") {
-      /* =====================================================
+
+    /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
       const deliveryOrder = await DeliveryOrder.findOne({
@@ -1611,7 +1612,6 @@ const OrderCancelByAdmin = async (req, res) => {
         });
       }
 
-      // 🔥 Call Delivery Cancel API (you already created this function)
       partnerResponse = await cancelDeliveryShipment(deliveryOrder.waybill);
 
       if (!partnerResponse?.status) {
@@ -1627,7 +1627,7 @@ const OrderCancelByAdmin = async (req, res) => {
     }
 
     /* -----------------------------
-       3️⃣ UPDATE ORDER COLLECTION
+       3️⃣ UPDATE MAIN ORDER
     ----------------------------- */
 
     order.order_status = "CANCELED";
@@ -1642,7 +1642,7 @@ const OrderCancelByAdmin = async (req, res) => {
       status: true,
       message: "Order canceled successfully",
       data: {
-        order_id: order._id,
+        order_id: order.order_id, // returning business id
         active_partner: order.active_partner,
         partner_response: partnerResponse,
       },

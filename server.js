@@ -123,6 +123,9 @@ const io = new Server(server, {
   },
 });
 
+// ✅ THIS LINE IS REQUIRED
+app.set("io", io);
+
 // Setup Socket.IO handlers
 setupSocketIO(io);
 

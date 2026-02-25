@@ -110,7 +110,7 @@ router.post(
 
 router.post(
   API_ROUTES.ORDER.CANCEL_ORDER_BY_ADMIN,
-  [commonValidations.userId("user_id"), handleValidationErrors],
+  [commonValidations.orderId("order_id"), handleValidationErrors],
   OrderCancelByAdmin,
 );
 
