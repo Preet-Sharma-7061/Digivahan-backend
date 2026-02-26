@@ -77,9 +77,9 @@ const addVehicle = async (req, res) => {
     });
   } catch (error) {
     console.error("Add vehicle error:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       status: false,
-      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+      message: error.message || ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     });
   }
 };
@@ -210,7 +210,8 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
-  console.log("➡️ Calling PREMIMUM RTO API");
+  console.log("➡️ Calling PREMIUM RTO API");
+
   try {
     const response = await axios.post(
       process.env.RTO_PREMIMUM_API_URL,
@@ -228,11 +229,30 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
       return response.data.result;
     }
 
-    const err = new Error(response.data.message || "PREMIUM_RTO_FAILED");
+    const err = new Error(response.data.message || "Premium RTO API failed");
     err.statusCode = response.data.statusCode || 500;
     throw err;
   } catch (error) {
-    const err = new Error("PREMIUM_RTO_UNAVAILABLE");
+    // ✅ If external API returned response
+    if (error.response) {
+      const err = new Error(
+        error.response.data?.message ||
+          error.response.statusText ||
+          "Premium RTO API error",
+      );
+      err.statusCode = error.response.status;
+      throw err;
+    }
+
+    // ✅ Network / timeout issue
+    if (error.code === "ECONNABORTED") {
+      const err = new Error("Premium RTO API timeout");
+      err.statusCode = 504;
+      throw err;
+    }
+
+    // ✅ Any unknown error
+    const err = new Error(error.message || "Premium RTO unavailable");
     err.statusCode = 502;
     throw err;
   }
@@ -285,7 +305,6 @@ const addVehicleInUsergarage = async (req, res) => {
         $push: {
           "garage.vehicles": {
             vehicle_id: vehicle_number,
-            api_data: matchedVehicle.api_data,
           },
         },
       },
@@ -426,6 +445,7 @@ const getGarage = async (req, res) => {
   try {
     const { user_id } = req.params;
 
+    // 1️⃣ Get only garage data
     const user = await User.findById(user_id).select("garage").lean();
 
     if (!user) {
@@ -435,10 +455,52 @@ const getGarage = async (req, res) => {
       });
     }
 
+    const garage = user.garage || { vehicles: [] };
+
+    if (!garage.vehicles || garage.vehicles.length === 0) {
+      return res.status(200).json({
+        status: true,
+        message: "Garage fetched successfully",
+        data: {
+          vehicles: [],
+          _id: garage._id || null,
+        },
+      });
+    }
+
+    // 2️⃣ Extract vehicle IDs
+    const vehicleIds = garage.vehicles.map((v) => v.vehicle_id);
+
+    // 3️⃣ Fetch all vehicle details in single query (🔥 optimized)
+    const vehicleDetails = await VehicleInfoData.find({
+      vehicle_id: { $in: vehicleIds },
+    }).lean();
+
+    // 4️⃣ Map vehicle data with garage structure
+    const vehicles = garage.vehicles.map((vehicle) => {
+      const apiVehicle = vehicleDetails.find(
+        (v) => v.vehicle_id === vehicle.vehicle_id,
+      );
+
+      return {
+        vehicle_id: vehicle.vehicle_id,
+        api_data: apiVehicle?.api_data || null,
+        data_source: apiVehicle?.data_source || null,
+        qr_list: vehicle.qr_list || [],
+        vehicle_doc: vehicle.vehicle_doc || {
+          security_code: "",
+          documents: [],
+        },
+      };
+    });
+
     return res.status(200).json({
       status: true,
       message: "Garage fetched successfully",
-      data: user.garage || { security_code: "", vehicles: [] },
+      data: {
+        vehicles,
+        _id: garage._id,
+      },
     });
   } catch (error) {
     console.error("Get garage error:", error);
@@ -514,7 +576,7 @@ const removeVehicle = async (req, res) => {
 
 const RefreshVehicleData = async (req, res) => {
   try {
-    const { user_id, vehicle_id } = req.body;
+    const { vehicle_id } = req.body;
 
     if (!vehicle_id) {
       return res.status(400).json({
@@ -523,8 +585,8 @@ const RefreshVehicleData = async (req, res) => {
       });
     }
 
-    // 1️⃣ FAST: Get vehicle from master (INDEXED)
-    const vehicleDoc = await VehicleInfoData.findOne({ vehicle_id }).lean();
+    // 1️⃣ Get vehicle from master collection
+    const vehicleDoc = await VehicleInfoData.findOne({ vehicle_id });
 
     if (!vehicleDoc) {
       return res.status(404).json({
@@ -537,21 +599,8 @@ const RefreshVehicleData = async (req, res) => {
     const now = new Date();
     const diffInHours = (now - lastUpdated) / (1000 * 60 * 60);
 
-    // 2️⃣ CASE: Data already fresh (<24h)
+    // 2️⃣ If data is already fresh (<24h)
     if (diffInHours < 24) {
-      // 🔄 Sync to user garage if needed
-      if (user_id) {
-        await User.updateOne(
-          { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
-          {
-            $set: {
-              "garage.vehicles.$.api_data": vehicleDoc.api_data,
-              "garage.vehicles.$.last_updated": vehicleDoc.last_updated,
-            },
-          },
-        );
-      }
-
       return res.status(200).json({
         status: true,
         message: "Vehicle data already up to date",
@@ -559,7 +608,7 @@ const RefreshVehicleData = async (req, res) => {
       });
     }
 
-    // 3️⃣ CASE: Data stale → Fetch from RTO
+    // 3️⃣ Fetch fresh data from RTO
     const rtoData = await fetchVehicleDataFromRTO(vehicle_id);
 
     const transformedData = transformRTODataToVehicleSchema(
@@ -567,29 +616,10 @@ const RefreshVehicleData = async (req, res) => {
       vehicle_id,
     );
 
-    // 4️⃣ Update master vehicle doc
-    await VehicleInfoData.updateOne(
-      { vehicle_id },
-      {
-        $set: {
-          api_data: transformedData,
-          last_updated: new Date(),
-        },
-      },
-    );
-
-    // 5️⃣ Sync to user garage (if user_id provided)
-    if (user_id) {
-      await User.updateOne(
-        { _id: user_id, "garage.vehicles.vehicle_id": vehicle_id },
-        {
-          $set: {
-            "garage.vehicles.$.api_data": transformedData,
-            "garage.vehicles.$.last_updated": new Date(),
-          },
-        },
-      );
-    }
+    // 4️⃣ Update only master vehicle collection
+    vehicleDoc.api_data = transformedData;
+    vehicleDoc.api_data.last_updated = new Date();
+    await vehicleDoc.save();
 
     return res.status(200).json({
       status: true,
@@ -598,9 +628,10 @@ const RefreshVehicleData = async (req, res) => {
     });
   } catch (error) {
     console.error("RefreshVehicleData Error:", error);
-    return res.status(500).json({
+
+    return res.status(error.statusCode || 500).json({
       status: false,
-      message: "Failed to refresh vehicle data",
+      message: error.message || "Failed to refresh vehicle data",
     });
   }
 };
@@ -758,5 +789,5 @@ module.exports = {
   getGarage,
   removeVehicle,
   checkSecurityCode,
-  verifySecurityCode
+  verifySecurityCode,
 };

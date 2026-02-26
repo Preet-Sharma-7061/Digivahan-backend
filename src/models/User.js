@@ -176,8 +176,6 @@ const vehicleSchema = new mongoose.Schema(
       trim: true,
     },
 
-    api_data: mongoose.Schema.Types.Mixed,
-
     vehicle_doc: {
       type: vehicleDocSchema,
       default: () => ({ documents: [] }),
