@@ -367,8 +367,10 @@ const API_ROUTES = {
     USER_CREATE_ORDER: "/user/create-order",
     GET_ALL_NEW_ORDER_BYADMIN: "/admin/all-new-order",
     ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
+    ADMIN_PRINT_MANIFEST_INBULK: "/admin/prints-manifest",
     ADMIN_GENERATE_MANIFEST: "/admin/generate-manifests/:order_id",
-    ADMIN_GENERATE_SHIPROCKET_LABEL: "/admin/generate-shiprocket-label/:order_id",
+    ADMIN_GENERATE_SHIPROCKET_LABEL:
+      "/admin/generate-shiprocket-label/:order_id",
     ADMIN_GENERATE_DELIVERY_LABEL: "/admin/generate-delivery-label/:order_id",
     // find from user myorder node
     USER_ORDERS: "/orders-user-list",
