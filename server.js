@@ -39,6 +39,7 @@ const trendingCarsRoutes = require("./src/routes/trendingCars.route.js");
 const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js");
 const contactUserRoutes = require("./src/routes/contactUser.routes.js");
 const googleServiceRoutes = require("./src/routes/googleService.routes.js");
+const queryRoutes = require("./src/routes/query.routes.js")
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -98,6 +99,7 @@ app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes);
 app.use(API_ROUTES.CHAT.BASE, chatRoutes);
 app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
+app.use(API_ROUTES.QUERY.BASE, queryRoutes)
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file

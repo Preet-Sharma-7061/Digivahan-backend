@@ -421,6 +421,12 @@ const API_ROUTES = {
     GET_SERVICE: "/get/all-service",
     UPDATE_SERVICE: "/update/google-service",
   },
+
+  QUERY: {
+    BASE: "/api",
+    RAISE_QUERY: "/user/submit-query",
+    GET_QUERY: "/admin/get-all-query",
+  },
 };
 
 module.exports = {
