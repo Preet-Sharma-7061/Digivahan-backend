@@ -9,6 +9,7 @@ const submitQuery = async (req, res) => {
       last_name,
       email,
       phone,
+      query_type,
       query,
     });
 
