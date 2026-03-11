@@ -2,7 +2,7 @@ const UserQuery = require("../models/usersquery.model");
 
 const submitQuery = async (req, res) => {
   try {
-    const { first_name, last_name, email, phone, query } = req.body;
+    const { first_name, last_name, email, phone, query_type, query } = req.body;
 
     const newQuery = new UserQuery({
       first_name,
