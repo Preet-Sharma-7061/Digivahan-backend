@@ -39,7 +39,7 @@ router.post(
   CheckQrInUser,
 );
 
-router.get(
+router.post(
   API_ROUTES.QR.GET_QR_TEMPLATES_BULK,
   [handleValidationErrors],
   CreateQrTemplateInBulk,
