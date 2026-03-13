@@ -456,6 +456,8 @@ const CheckQrInUser = async (req, res) => {
 const CreateQrTemplateInBulk = async (req, res) => {
   try {
     const { template_type } = req.body;
+    console.log(template_type);
+    
     const qrList = await QRAssignment.find({
       is_printed: false,
       qr_status: "unassigned",
