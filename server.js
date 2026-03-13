@@ -41,6 +41,10 @@ const contactUserRoutes = require("./src/routes/contactUser.routes.js");
 const googleServiceRoutes = require("./src/routes/googleService.routes.js");
 const queryRoutes = require("./src/routes/query.routes.js")
 
+const faqRoutes = require("./src/routes/faq.routes");
+const appointmentRoutes = require("./src/routes/appointment.routes");
+const concernRoutes = require("./src/routes/concern.routes");
+
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
 
@@ -69,6 +73,9 @@ app.use(async (req, res, next) => {
 });
 
 // Hasan Routes Code
+app.use("/api/faq", faqRoutes);
+app.use("/api/appointment", appointmentRoutes);
+app.use("/api/concern",concernRoutes);
 app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
