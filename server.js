@@ -44,6 +44,7 @@ const queryRoutes = require("./src/routes/query.routes.js")
 const faqRoutes = require("./src/routes/faq.routes");
 const appointmentRoutes = require("./src/routes/appointment.routes");
 const concernRoutes = require("./src/routes/concern.routes");
+const userRoutes = require("./src/routes/user.routes");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -85,6 +86,7 @@ app.use(qrBenefitsRoutes);
 app.use(newsRoutes);
 app.use(tipsTricksRoutes);
 app.use(notificationImageRoutes);
+app.use("/api/user", userRoutes);
 
 // -------------------- ROUTES --------------------
 
