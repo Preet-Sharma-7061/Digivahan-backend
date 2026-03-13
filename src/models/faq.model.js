@@ -5,7 +5,6 @@ const faqSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      index: true
     },
     question: {
       type: String,
