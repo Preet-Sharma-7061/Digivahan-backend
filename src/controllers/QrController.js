@@ -456,8 +456,7 @@ const CheckQrInUser = async (req, res) => {
 const CreateQrTemplateInBulk = async (req, res) => {
   try {
     const { template_type } = req.body;
-    console.log(template_type);
-    
+
     const qrList = await QRAssignment.find({
       is_printed: false,
       qr_status: "unassigned",
@@ -783,6 +782,79 @@ const CreateSingleQRTemplate = async (req, res) => {
   }
 };
 
+const filterQrlist = async (req, res) => {
+  try {
+    const { qr_types } = req.params;
+
+    let filter = {};
+
+    // agar admin specific status bhejta hai
+    if (qr_types && qr_types !== "all") {
+      filter.qr_status = qr_types;
+    }
+
+    console.log(filter);
+    
+    // only active QR (recommended)
+    filter.status = "active";
+
+    const qrList = await QRAssignment.find(filter).sort({ qr_no: 1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      total: qrList.length,
+      data: qrList,
+    });
+  } catch (error) {
+    console.error("Filter QR Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error filtering QR list",
+    });
+  }
+};
+
+const QrBlockedByAdmin = async (req, res) => {
+  try {
+    const { qr_id, reason } = req.body;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "QR ID is required",
+      });
+    }
+
+    const qr = await QRAssignment.findOne({ qr_id });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    qr.qr_status = "blocked";
+    qr.blocked_reason = reason || "Blocked by admin";
+
+    await qr.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "QR blocked successfully",
+      data: qr,
+    });
+  } catch (error) {
+    console.error("QR Block Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error blocking QR",
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
   getQrDetails,
@@ -792,4 +864,6 @@ module.exports = {
   CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
+  filterQrlist,
+  QrBlockedByAdmin
 };

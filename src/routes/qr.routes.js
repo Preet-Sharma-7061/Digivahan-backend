@@ -17,6 +17,8 @@ const {
   CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
+  filterQrlist,
+  QrBlockedByAdmin
 } = require("../controllers/QrController.js");
 
 router.post(
@@ -62,5 +64,17 @@ router.get(
   [handleValidationErrors],
   GetUserdetailsThrowTheQRId,
 );
+
+router.get(
+  API_ROUTES.QR.ADMIN_FILTER_QR,
+  [handleValidationErrors],
+  filterQrlist
+)
+
+router.post(
+  API_ROUTES.QR.ADMIN_BLOCKED_QR,
+  [handleValidationErrors],
+  QrBlockedByAdmin
+)
 
 module.exports = router;

@@ -1491,7 +1491,7 @@ const findOrderByAdminThrowUserId = async (req, res) => {
 // --
 const GetAllNewOrderListToAdmin = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.body;
+    const { page = 1, limit = 20 } = req.params;
 
     // pagination calculation
     const skip = (page - 1) * limit;
