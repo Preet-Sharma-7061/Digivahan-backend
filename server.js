@@ -45,6 +45,8 @@ const faqRoutes = require("./src/routes/faq.routes");
 const appointmentRoutes = require("./src/routes/appointment.routes");
 const concernRoutes = require("./src/routes/concern.routes");
 const userRoutes = require("./src/routes/user.routes");
+const deleteAccountRoutes = require("./src/routes/deleteAccount.routes");
+const reportIssueRoutes = require("./src/routes/reportIssue.routes");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -87,6 +89,8 @@ app.use(newsRoutes);
 app.use(tipsTricksRoutes);
 app.use(notificationImageRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/delete-account",deleteAccountRoutes);
+app.use("/api/report-issue",reportIssueRoutes);
 
 // -------------------- ROUTES --------------------
 
@@ -109,6 +113,7 @@ app.use(API_ROUTES.CHAT.BASE, chatRoutes);
 app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
 app.use(API_ROUTES.QUERY.BASE, queryRoutes)
+
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file

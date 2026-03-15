@@ -55,43 +55,111 @@ exports.raiseConcern = async (req, res) => {
   }
 };
 
-// DELETE CONCERN
+// // DELETE CONCERN
+
+// exports.deleteConcern = async (req, res) => {
+//   try {
+
+//     const { id } = req.params;
+
+//     const concern = await Concern.findById(id);
+
+//     if (!concern) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Concern not found",
+//       });
+//     }
+
+//     // delete images from cloudinary
+//     if (concern.incidentProof && concern.incidentProof.length > 0) {
+
+//       for (const imageUrl of concern.incidentProof) {
+
+//         // extract public_id from cloudinary URL
+//         const parts = imageUrl.split("/");
+//         const fileName = parts[parts.length - 1];
+//         const publicId = "uploads/" + fileName.split(".")[0];
+
+//         await deleteFromCloudinary(publicId);
+
+//       }
+//     }
+
+//     // delete concern from database
+//     await Concern.findByIdAndDelete(id);
+
+//     return res.json({
+//       success: true,
+//       message: "Concern and attached images deleted successfully",
+//     });
+
+//   } catch (error) {
+
+//     res.status(500).json({
+//       success: false,
+//       error: error.message,
+//     });
+
+//   }
+// };
+
+// DELETE CONCERN (single / multiple / by status)
 
 exports.deleteConcern = async (req, res) => {
   try {
 
-    const { id } = req.params;
+    const { id, ids, status } = req.body;
 
-    const concern = await Concern.findById(id);
+    let filter = {};
 
-    if (!concern) {
+    // single id
+    if (id) {
+      filter._id = id;
+    }
+
+    // multiple ids
+    if (ids && ids.length > 0) {
+      filter._id = { $in: ids };
+    }
+
+    // delete by status
+    if (status) {
+      filter.status = status;
+    }
+
+    const concerns = await Concern.find(filter);
+
+    if (!concerns || concerns.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Concern not found",
+        message: "No concerns found",
       });
     }
 
     // delete images from cloudinary
-    if (concern.incidentProof && concern.incidentProof.length > 0) {
+    for (const concern of concerns) {
 
-      for (const imageUrl of concern.incidentProof) {
+      if (concern.incidentProof && concern.incidentProof.length > 0) {
 
-        // extract public_id from cloudinary URL
-        const parts = imageUrl.split("/");
-        const fileName = parts[parts.length - 1];
-        const publicId = "uploads/" + fileName.split(".")[0];
+        for (const imageUrl of concern.incidentProof) {
 
-        await deleteFromCloudinary(publicId);
+          const parts = imageUrl.split("/");
+          const fileName = parts[parts.length - 1];
+          const publicId = "uploads/" + fileName.split(".")[0];
 
+          await deleteFromCloudinary(publicId);
+
+        }
       }
     }
 
-    // delete concern from database
-    await Concern.findByIdAndDelete(id);
+    // delete from database
+    await Concern.deleteMany(filter);
 
     return res.json({
       success: true,
-      message: "Concern and attached images deleted successfully",
+      message: `${concerns.length} concern(s) deleted successfully`,
     });
 
   } catch (error) {
@@ -103,6 +171,7 @@ exports.deleteConcern = async (req, res) => {
 
   }
 };
+
 
 // GET CONCERNS
 

@@ -393,6 +393,8 @@ const API_ROUTES = {
     GET_USER_REVIEWS: "/reviews/user/:user_id",
     GET_AVERAGE_RATING: "/reviews/rating/:product_type",
     USER_FEEDBACK: "/user-feedback",
+    REVIEW_ANALYTICS: "/review/review-analytics",
+    REPLY: "/review/reply-review",
   },
 
   // Chat routes
