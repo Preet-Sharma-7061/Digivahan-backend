@@ -119,6 +119,7 @@ const API_ROUTES = {
     BASE: "/api",
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
+    GENERATE_QR_WITH_ID:"/generate-qr-id",
     QR_DETAILS: "/qr/:qr_id",
     GET_QR_TEMPLATES_BULK: "/create/qr-template-in-bluk",
     GET_QR_TEMPLATE_USER: "/create/qr-template-user/:qr_id",
