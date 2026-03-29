@@ -432,6 +432,18 @@ const API_ROUTES = {
     RAISE_QUERY: "/user/submit-query",
     GET_QUERY: "/admin/get-all-query",
   },
+
+  BBPS:{
+    BASE:"/api",
+    GET_MINIKYC_DETAILS:"/get-minikyc/data",
+    GET_CATEGORY:"/get-biller/category",
+    GET_BILLER_LIST: "/biller-list",
+    GET_BILLER_DETAILS: "/biller-details",
+    GET_BILLER_ENQUIRY:"/biller-enquiry",
+    VALIDATE_BILLER:"/validate-biller",
+    PAYMENT_SERVICE:"/user/payment-service",
+    GET_PAYMENT_DETAILS:"/user/payment-details/:user_id"
+  }
 };
 
 module.exports = {
