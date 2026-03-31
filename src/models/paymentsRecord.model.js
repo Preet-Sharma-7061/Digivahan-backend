@@ -15,7 +15,7 @@ const paymentSchema = new mongoose.Schema(
     enquiryReferenceId: String,
     vehicle_number: String,
     mobile: String,
-    transactionAmount: Number,
+    transactionAmount: String,
 
     // 🔹 Status tracking
     status: {
@@ -23,6 +23,8 @@ const paymentSchema = new mongoose.Schema(
       enum: ["INIT", "SUCCESS", "FAILED"],
       default: "INIT",
     },
+
+    reason: { type: String },
 
     // 🔹 Full API response (Mixed)
     full_payment_details: {
